@@ -5,34 +5,87 @@ using System.Threading.Tasks;
 
 namespace NorthStar.Tracking
 {
-    // Continuously processes frames in the background and stores
-    // the most recently completed tracking frame.
+    // Continuously processes the most recent image in the background
+    // and stores the most recently completed tracking result.
+    //
+    // The processor owns pose tracking only. It does not capture
+    // camera frames or perform image decoding/conversion.
     public sealed class TrackingProcessor : IDisposable
     {
-        private readonly Func<NorthStarTrackingFrame> frameProvider;
+        // ============================================================
+        // Dependencies
+        // ============================================================
 
-        private readonly CancellationTokenSource cancellationSource;
+        private readonly PoseModel poseModel;
+
+
+        // ============================================================
+        // Processing state
+        // ============================================================
+
+        private readonly object processingLock =
+            new object();
+
+        private CancellationTokenSource? cancellationSource;
+
+        private Task? processingTask;
+
+        private bool disposed;
+
+
+        // ============================================================
+        // Latest image
+        // ============================================================
+
+        private readonly object imageLock =
+            new object();
+
+        private NorthStarImage? latestImage;
+
+
+        // ============================================================
+        // Latest result
+        // ============================================================
 
         private readonly object frameLock =
             new object();
 
         private NorthStarTrackingFrame? latestFrame;
 
-        private Task? processingTask;
 
-        private bool disposed;
+        // ============================================================
+        // Constructor
+        // ============================================================
 
         public TrackingProcessor(
-            Func<NorthStarTrackingFrame> frameProvider)
+            PoseModel poseModel)
         {
-            this.frameProvider =
-                frameProvider ??
+            this.poseModel =
+                poseModel ??
                 throw new ArgumentNullException(
-                    nameof(frameProvider));
-
-            cancellationSource =
-                new CancellationTokenSource();
+                    nameof(poseModel));
         }
+
+
+        // ============================================================
+        // State
+        // ============================================================
+
+        public bool IsRunning
+        {
+            get
+            {
+                lock (processingLock)
+                {
+                    return processingTask != null;
+                }
+            }
+        }
+
+
+        // ============================================================
+        // Latest tracking result
+        // ============================================================
 
         public NorthStarTrackingFrame? LatestFrame
         {
@@ -45,37 +98,90 @@ namespace NorthStar.Tracking
             }
         }
 
+
+        // ============================================================
+        // Frame submission
+        // ============================================================
+
+        // Supplies the newest image to the tracking processor.
+        //
+        // If tracking is currently processing another image, that
+        // image is allowed to finish. Any image waiting to be processed
+        // is replaced by the newly submitted image.
+        public void SubmitFrame(
+            NorthStarImage image)
+        {
+            ThrowIfDisposed();
+
+            if (image == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(image));
+            }
+
+            lock (imageLock)
+            {
+                latestImage =
+                    image;
+            }
+        }
+
+
+        // ============================================================
+        // Lifecycle
+        // ============================================================
+
         public void Start()
         {
             ThrowIfDisposed();
 
-            if (processingTask != null)
+            lock (processingLock)
             {
-                throw new InvalidOperationException(
-                    "Tracking processor has already been started.");
-            }
+                if (processingTask != null)
+                {
+                    throw new InvalidOperationException(
+                        "Tracking processor is already running.");
+                }
 
-            processingTask =
-                Task.Run(
-                    ProcessingLoop);
+                cancellationSource =
+                    new CancellationTokenSource();
+
+                CancellationToken token =
+                    cancellationSource.Token;
+
+                processingTask =
+                    Task.Run(
+                        () => ProcessingLoop(token));
+            }
         }
 
         public void Stop()
         {
-            if (disposed)
+            CancellationTokenSource? source;
+            Task? task;
+
+            lock (processingLock)
             {
-                return;
+                source =
+                    cancellationSource;
+
+                task =
+                    processingTask;
+
+                if (source == null ||
+                    task == null)
+                {
+                    return;
+                }
+
+                cancellationSource =
+                    null;
+
+                processingTask =
+                    null;
             }
 
-            cancellationSource.Cancel();
-
-            Task? task =
-                processingTask;
-
-            if (task == null)
-            {
-                return;
-            }
+            source.Cancel();
 
             try
             {
@@ -88,25 +194,56 @@ namespace NorthStar.Tracking
                     innerException =>
                         innerException is OperationCanceledException);
             }
+
+            source.Dispose();
+
+            lock (imageLock)
+            {
+                latestImage =
+                    null;
+            }
         }
 
-        private void ProcessingLoop()
-        {
-            CancellationToken token =
-                cancellationSource.Token;
 
+        // ============================================================
+        // Background processing
+        // ============================================================
+
+        private void ProcessingLoop(
+            CancellationToken token)
+        {
             try
             {
                 while (!token.IsCancellationRequested)
                 {
+                    NorthStarImage? image =
+                        TakeLatestImage();
+
+                    if (image == null)
+                    {
+                        Thread.Yield();
+
+                        continue;
+                    }
+
+                    PoseResult pose =
+                        poseModel.ProcessFrame(
+                            image);
+
                     NorthStarTrackingFrame frame =
-                        frameProvider();
+                        new NorthStarTrackingFrame(
+                            image,
+                            pose);
 
                     lock (frameLock)
                     {
                         latestFrame =
                             frame;
                     }
+
+                    TrackingFrameReady?.Invoke(
+                        this,
+                        frame);
                 }
             }
             catch (Exception exception)
@@ -122,7 +259,40 @@ namespace NorthStar.Tracking
             }
         }
 
-        public event EventHandler<Exception>? ProcessingFailed;
+
+        // ============================================================
+        // Image handoff
+        // ============================================================
+
+        private NorthStarImage? TakeLatestImage()
+        {
+            lock (imageLock)
+            {
+                NorthStarImage? image =
+                    latestImage;
+
+                latestImage =
+                    null;
+
+                return image;
+            }
+        }
+
+
+        // ============================================================
+        // Events
+        // ============================================================
+
+        public event EventHandler<
+            NorthStarTrackingFrame>? TrackingFrameReady;
+
+        public event EventHandler<
+            Exception>? ProcessingFailed;
+
+
+        // ============================================================
+        // Disposal
+        // ============================================================
 
         public void Dispose()
         {
@@ -133,7 +303,17 @@ namespace NorthStar.Tracking
 
             Stop();
 
-            cancellationSource.Dispose();
+            lock (imageLock)
+            {
+                latestImage =
+                    null;
+            }
+
+            lock (frameLock)
+            {
+                latestFrame =
+                    null;
+            }
 
             disposed =
                 true;
@@ -141,6 +321,11 @@ namespace NorthStar.Tracking
             GC.SuppressFinalize(
                 this);
         }
+
+
+        // ============================================================
+        // Validation
+        // ============================================================
 
         private void ThrowIfDisposed()
         {

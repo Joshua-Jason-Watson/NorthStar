@@ -151,6 +151,14 @@
                 HorizontalAlignment="Stretch"
                 Click="StartPreviewButton_Click" />
 
+            <Button
+                x:Name="StartTrackingButton"
+                Content="Start Tracking"
+                Grid.Row="10"
+                Margin="0,10,0,0"
+                HorizontalAlignment="Stretch"
+                Click="StartTrackingButton_Click" />
+
         </Grid>
 
         <!-- Camera preview -->
@@ -165,8 +173,11 @@
                 <Image
                     x:Name="PreviewImage"
                     Stretch="Uniform" />
-            </Grid>
 
+                <Canvas
+                    x:Name="TrackingOverlay"
+                    IsHitTestVisible="False" />
+            </Grid>
         </Border>
 
 

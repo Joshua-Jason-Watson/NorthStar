@@ -1,55 +1,69 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
+
 using NorthStar.Camera;
-using NorthStar.Conversion;
-using NorthStar.Decoding;
-using NorthStar.Formats;
 using NorthStar.Frames;
+using NorthStar.Tracking;
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
-using System.Threading;
-using System.Threading.Tasks;
+using Windows.Foundation;
+
+using IOPath = System.IO.Path;
 
 namespace NorthStar.UI
 {
     public sealed partial class MainWindow : Window
     {
+        // ============================================================
+        // NorthStar runtime
+        // ============================================================
+
+        private NorthStarRuntime? runtime;
+
+
+        // ============================================================
+        // Camera discovery and capability selection
+        // ============================================================
+
         private readonly WindowsCameraDiscovery cameraDiscovery;
-
-        private readonly FrameDecoderRegistry previewDecoderRegistry =
-            new FrameDecoderRegistry();
-
-        private readonly ImageConverterRegistry previewConverterRegistry =
-            new ImageConverterRegistry();
-
-        private readonly DispatcherQueueTimer previewDisplayTimer;
 
         private IReadOnlyList<CameraDescriptor> cameras =
             Array.Empty<CameraDescriptor>();
 
         private CameraCapability? selectedCapability;
 
-        private CameraDevice? previewCamera;
 
-        private CancellationTokenSource? previewCts;
+        // ============================================================
+        // Preview display
+        // ============================================================
 
-        private Task? previewTask;
+        private readonly DispatcherQueueTimer previewDisplayTimer;
 
         private WriteableBitmap? previewBitmap;
 
         private byte[]? previewPixels;
 
-        // The preview worker publishes the newest completed image here.
-        //
-        // There is intentionally only one pending image. If the UI has
-        // not displayed an older image yet, a newer image replaces it.
-        private NorthStarImage? latestPreviewImage;
+        private readonly List<Ellipse> landmarkDots =
+            new();
+
+
+        // ============================================================
+        // Window state
+        // ============================================================
 
         private bool closed;
+
+
+        // ============================================================
+        // Constructor
+        // ============================================================
 
         public MainWindow()
         {
@@ -57,12 +71,6 @@ namespace NorthStar.UI
 
             cameraDiscovery =
                 new WindowsCameraDiscovery();
-
-            previewDecoderRegistry.Register(
-                new NV12Decoder());
-
-            previewConverterRegistry.Register(
-                new NV12Converter());
 
             previewDisplayTimer =
                 DispatcherQueue.CreateTimer();
@@ -81,6 +89,11 @@ namespace NorthStar.UI
             Closed +=
                 MainWindow_Closed;
         }
+
+
+        // ============================================================
+        // Camera selection
+        // ============================================================
 
         private void LoadCameras()
         {
@@ -102,7 +115,7 @@ namespace NorthStar.UI
             object sender,
             SelectionChangedEventArgs e)
         {
-            StopPreview();
+            StopRuntime();
 
             ResolutionSelector.Items.Clear();
             FrameRateSelector.Items.Clear();
@@ -136,53 +149,6 @@ namespace NorthStar.UI
                     new ResolutionOption(
                         capability.Width,
                         capability.Height));
-            }
-        }
-
-        private sealed class ResolutionOption
-        {
-            public int Width { get; }
-
-            public int Height { get; }
-
-            public string DisplayName =>
-                $"{Width} × {Height}";
-
-            public ResolutionOption(
-                int width,
-                int height)
-            {
-                Width =
-                    width;
-
-                Height =
-                    height;
-            }
-
-            public override string ToString()
-            {
-                return DisplayName;
-            }
-        }
-
-        private sealed class FormatOption
-        {
-            public CameraCapability Capability { get; }
-
-            public string DisplayName =>
-                GetFormatName(
-                    Capability.Subtype);
-
-            public FormatOption(
-                CameraCapability capability)
-            {
-                Capability =
-                    capability;
-            }
-
-            public override string ToString()
-            {
-                return DisplayName;
             }
         }
 
@@ -302,6 +268,58 @@ namespace NorthStar.UI
                 format.Capability;
         }
 
+
+        // ============================================================
+        // Camera capability display helpers
+        // ============================================================
+
+        private sealed class ResolutionOption
+        {
+            public int Width { get; }
+
+            public int Height { get; }
+
+            public string DisplayName =>
+                $"{Width} × {Height}";
+
+            public ResolutionOption(
+                int width,
+                int height)
+            {
+                Width =
+                    width;
+
+                Height =
+                    height;
+            }
+
+            public override string ToString()
+            {
+                return DisplayName;
+            }
+        }
+
+        private sealed class FormatOption
+        {
+            public CameraCapability Capability { get; }
+
+            public string DisplayName =>
+                GetFormatName(
+                    Capability.Subtype);
+
+            public FormatOption(
+                CameraCapability capability)
+            {
+                Capability =
+                    capability;
+            }
+
+            public override string ToString()
+            {
+                return DisplayName;
+            }
+        }
+
         private static string GetFormatName(
             Guid subtype)
         {
@@ -329,7 +347,11 @@ namespace NorthStar.UI
             return subtype.ToString();
         }
 
-        
+
+        // ============================================================
+        // Runtime lifecycle
+        // ============================================================
+
         private void StartPreviewButton_Click(
             object sender,
             RoutedEventArgs e)
@@ -345,154 +367,75 @@ namespace NorthStar.UI
                 return;
             }
 
-            StopPreview();
+            StopRuntime();
 
             CameraCapability capability =
                 selectedCapability;
 
-            CameraDevice newCamera =
-                new WindowsCameraDeviceFactory()
-                    .Open(camera);
-
-            CancellationTokenSource? newCts =
-                null;
+            NorthStarRuntime newRuntime =
+                new NorthStarRuntime(
+                    GetModelPath());
 
             try
             {
-                newCamera.Configure(
+                newRuntime.Start(
+                    camera,
                     capability);
 
-                WriteableBitmap newBitmap =
+                runtime =
+                    newRuntime;
+
+                previewBitmap =
                     new WriteableBitmap(
                         capability.Width,
                         capability.Height);
 
-                byte[] newPixels =
+                previewPixels =
                     new byte[
                         checked(
                             capability.Width *
                             capability.Height *
                             4)];
 
-                newCts =
-                    new CancellationTokenSource();
-
-                // These are the actual objects the worker will use.
-                //
-                // Keeping these local variables separate means we can safely
-                // transfer ownership to the MainWindow fields without changing
-                // what the worker's closure references.
-                CameraDevice workerCamera =
-                    newCamera;
-
-                CancellationTokenSource workerCts =
-                    newCts;
-
-                previewCamera =
-                    newCamera;
-
-                previewBitmap =
-                    newBitmap;
-
-                previewPixels =
-                    newPixels;
-
-                previewCts =
-                    newCts;
-
                 PreviewImage.Source =
-                    newBitmap;
+                    previewBitmap;
 
                 previewDisplayTimer.Start();
-
-                previewTask =
-                    Task.Run(
-                        () => PreviewLoop(
-                            workerCamera,
-                            workerCts.Token));
-
-                // Ownership has now been transferred to the MainWindow fields
-                // and the worker task.
-                newCamera =
-                    null!;
-
-                newCts =
-                    null;
             }
             catch
             {
-                newCts?.Cancel();
-                newCts?.Dispose();
-
-                newCamera.Dispose();
+                newRuntime.Dispose();
 
                 throw;
             }
         }
 
-
-        private void PreviewLoop(
-            CameraDevice camera,
-            CancellationToken cancellationToken)
+        private void StopRuntime()
         {
-            try
-            {
-                while (
-                    !cancellationToken.IsCancellationRequested)
-                {
-                    NorthStarFrame frame =
-                        camera.GetFrame();
+            previewDisplayTimer.Stop();
 
-                    IFrameDecoder decoder =
-                        previewDecoderRegistry.GetDecoder(
-                            frame.Subtype);
+            NorthStarRuntime? currentRuntime =
+                runtime;
 
-                    NorthStarImage image =
-                        decoder.Decode(
-                            frame);
+            runtime =
+                null;
 
-                    if (image.PixelFormat !=
-                        NorthStarPixelFormat.BGR24)
-                    {
-                        IImageConverter converter =
-                            previewConverterRegistry.GetConverter(
-                                image.PixelFormat,
-                                NorthStarPixelFormat.BGR24);
+            currentRuntime?.Dispose();
 
-                        image =
-                            converter.Convert(
-                                image,
-                                NorthStarPixelFormat.BGR24);
-                    }
+            previewBitmap =
+                null;
 
-                    // Publish this frame as the newest available frame.
-                    //
-                    // An older frame may be replaced here. That is
-                    // intentional: stale preview frames have no value.
-                    Interlocked.Exchange(
-                        ref latestPreviewImage,
-                        image);
-                }
-            }
-            catch
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return;
-                }
+            previewPixels =
+                null;
 
-                DispatcherQueue.TryEnqueue(
-                    () =>
-                    {
-                        if (closed)
-                        {
-                            return;
-                        }
-
-                        StopPreview();
-                    });
-            }
+            PreviewImage.Source =
+                null;
         }
+
+
+        // ============================================================
+        // Preview display
+        // ============================================================
 
         private void PreviewDisplayTimer_Tick(
             DispatcherQueueTimer sender,
@@ -503,10 +446,30 @@ namespace NorthStar.UI
                 return;
             }
 
+            NorthStarRuntime? currentRuntime =
+                runtime;
+
+            if (currentRuntime == null)
+            {
+                return;
+            }
+
+            NorthStarTrackingFrame? trackingFrame =
+                currentRuntime.LatestFrame;
+
+            if (trackingFrame != null)
+            {
+                UpdatePreviewImage(
+                    trackingFrame.Image);
+
+                UpdateTrackingOverlay(
+                    trackingFrame);
+
+                return;
+            }
+
             NorthStarImage? image =
-                Interlocked.Exchange(
-                    ref latestPreviewImage,
-                    null);
+                currentRuntime.LatestImage;
 
             if (image == null)
             {
@@ -515,6 +478,8 @@ namespace NorthStar.UI
 
             UpdatePreviewImage(
                 image);
+
+            ClearTrackingOverlay();
         }
 
         private void UpdatePreviewImage(
@@ -564,9 +529,10 @@ namespace NorthStar.UI
             int height =
                 image.Height;
 
-            for (int y = 0;
-                 y < height;
-                 y++)
+            for (
+                int y = 0;
+                y < height;
+                y++)
             {
                 int sourceOffset =
                     y *
@@ -577,9 +543,10 @@ namespace NorthStar.UI
                     width *
                     4;
 
-                for (int x = 0;
-                     x < width;
-                     x++)
+                for (
+                    int x = 0;
+                    x < width;
+                    x++)
                 {
                     int sourcePixel =
                         sourceOffset +
@@ -589,30 +556,22 @@ namespace NorthStar.UI
                         destinationOffset +
                         (x * 4);
 
-                    pixels[
-                        destinationPixel] =
-                        source[
-                            sourcePixel];
+                    pixels[destinationPixel] =
+                        source[sourcePixel];
 
-                    pixels[
-                        destinationPixel + 1] =
-                        source[
-                            sourcePixel + 1];
+                    pixels[destinationPixel + 1] =
+                        source[sourcePixel + 1];
 
-                    pixels[
-                        destinationPixel + 2] =
-                        source[
-                            sourcePixel + 2];
+                    pixels[destinationPixel + 2] =
+                        source[sourcePixel + 2];
 
-                    pixels[
-                        destinationPixel + 3] =
+                    pixels[destinationPixel + 3] =
                         255;
                 }
             }
 
             using Stream stream =
-                bitmap.PixelBuffer
-                    .AsStream();
+                bitmap.PixelBuffer.AsStream();
 
             stream.Position =
                 0;
@@ -625,70 +584,171 @@ namespace NorthStar.UI
             bitmap.Invalidate();
         }
 
-        private void StopPreview()
+        private void EnsureLandmarkDots(
+            int count)
         {
-            previewDisplayTimer.Stop();
-
-            CancellationTokenSource? cts =
-                previewCts;
-
-            Task? task =
-                previewTask;
-
-            previewCts =
-                null;
-
-            previewTask =
-                null;
-
-            if (cts != null)
+            while (landmarkDots.Count < count)
             {
-                cts.Cancel();
+                Ellipse dot =
+                    new Ellipse
+                    {
+                        Width = 8,
+                        Height = 8,
+                        Fill =
+                            new SolidColorBrush(
+                                Microsoft.UI.Colors.Red)
+                    };
+
+                TrackingOverlay.Children.Add(
+                    dot);
+
+                landmarkDots.Add(
+                    dot);
             }
 
-            // The capture worker owns the camera while it is running.
-            //
-            // Wait for it to finish before disposing the camera so that
-            // the worker can never be using CameraDevice after disposal.
-            if (task != null &&
-                !task.IsCompleted)
+            while (landmarkDots.Count > count)
             {
-                try
-                {
-                    task.Wait(
-                        TimeSpan.FromSeconds(2));
-                }
-                catch (AggregateException)
-                {
-                    // The worker's exception has already been handled
-                    // by PreviewLoop. Shutdown should continue.
-                }
+                Ellipse dot =
+                    landmarkDots[^1];
+
+                TrackingOverlay.Children.Remove(
+                    dot);
+
+                landmarkDots.RemoveAt(
+                    landmarkDots.Count - 1);
             }
-
-            cts?.Dispose();
-
-            CameraDevice? camera =
-                previewCamera;
-
-            previewCamera =
-                null;
-
-            camera?.Dispose();
-
-            // Remove any frame that was waiting for the UI.
-            Interlocked.Exchange(
-                ref latestPreviewImage,
-                null);
-
-            previewBitmap =
-                null;
-
-            previewPixels =
-                null;
-
-            PreviewImage.Source =
-                null;
         }
+
+        private void ClearTrackingOverlay()
+        {
+            foreach (
+                Ellipse dot
+                in landmarkDots)
+            {
+                dot.Visibility =
+                    Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateTrackingOverlay(
+            NorthStarTrackingFrame trackingFrame)
+        {
+            PoseResult pose =
+                trackingFrame.Pose;
+
+            NorthStarImage image =
+                trackingFrame.Image;
+
+            EnsureLandmarkDots(
+                pose.Landmarks.Count);
+
+            double imageWidth =
+                PreviewImage.ActualWidth;
+
+            double imageHeight =
+                PreviewImage.ActualHeight;
+
+            if (imageWidth <= 0 ||
+                imageHeight <= 0)
+            {
+                return;
+            }
+
+            double scaleX =
+                imageWidth / image.Width;
+
+            double scaleY =
+                imageHeight / image.Height;
+
+            double scale =
+                Math.Min(
+                    scaleX,
+                    scaleY);
+
+            double displayedWidth =
+                image.Width * scale;
+
+            double displayedHeight =
+                image.Height * scale;
+
+            double offsetX =
+                (imageWidth - displayedWidth) / 2.0;
+
+            double offsetY =
+                (imageHeight - displayedHeight) / 2.0;
+
+            for (
+                int i = 0;
+                i < pose.Landmarks.Count;
+                i++)
+            {
+                Landmark landmark =
+                    pose.Landmarks[i];
+
+                Ellipse dot =
+                    landmarkDots[i];
+
+                double x =
+                    offsetX +
+                    (landmark.X * scale);
+
+                double y =
+                    offsetY +
+                    (landmark.Y * scale);
+
+                Canvas.SetLeft(
+                    dot,
+                    x - dot.Width / 2);
+
+                Canvas.SetTop(
+                    dot,
+                    y - dot.Height / 2);
+
+                dot.Visibility =
+                    Visibility.Visible;
+            }
+        }
+
+
+        // ============================================================
+        // Tracking
+        // ============================================================
+
+        private void StartTrackingButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (runtime == null ||
+                !runtime.IsRunning)
+            {
+                return;
+            }
+
+            if (runtime.IsTracking)
+            {
+                return;
+            }
+
+            runtime.StartTracking();
+        }
+
+
+        // ============================================================
+        // Model configuration
+        // ============================================================
+
+        private string GetModelPath()
+        {
+            return IOPath.Combine(
+                        AppContext.BaseDirectory,
+                        "Models",
+                        "rtmpose-m.onnx");
+        }
+
+
+        // ============================================================
+        // Window shutdown
+        // ============================================================
 
         private void MainWindow_Closed(
             object sender,
@@ -697,7 +757,7 @@ namespace NorthStar.UI
             closed =
                 true;
 
-            StopPreview();
+            StopRuntime();
 
             previewDisplayTimer.Tick -=
                 PreviewDisplayTimer_Tick;

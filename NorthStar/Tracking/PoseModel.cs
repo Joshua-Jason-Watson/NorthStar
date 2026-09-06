@@ -73,10 +73,11 @@ namespace NorthStar.Tracking
                         "[batch, channels, height, width].");
                 }
 
-                if (dimensions[0] != 1)
+                if (dimensions[0] != -1 &&
+                    dimensions[0] != 1)
                 {
                     throw new InvalidOperationException(
-                        $"The pose model must use a batch size of 1. " +
+                        $"The pose model must support a batch size of 1. " +
                         $"Model reported: {dimensions[0]}.");
                 }
 

@@ -3,36 +3,61 @@ using NorthStar.Conversion;
 using NorthStar.Decoding;
 using NorthStar.Formats;
 using NorthStar.Frames;
-using NorthStar.Tracking;
 
 namespace NorthStar.Processing
 {
-    // Coordinates camera capture, frame decoding, image conversion,
-    // and pose tracking.
+    // Coordinates camera capture, frame decoding, and image
+    // conversion for individual camera frames.
+    //
+    // This class processes one frame at a time. It does not own
+    // tracking, background processing, or application lifecycle.
     public sealed class NorthStarPipeline
     {
+        // ============================================================
+        // Dependencies
+        // ============================================================
+
         private readonly ICamera camera;
         private readonly FrameDecoderRegistry decoderRegistry;
         private readonly ImageConverterRegistry converterRegistry;
-        private readonly PoseModel poseModel;
+
+
+        // ============================================================
+        // Constructor
+        // ============================================================
 
         public NorthStarPipeline(
             ICamera camera,
             FrameDecoderRegistry decoderRegistry,
-            ImageConverterRegistry converterRegistry,
-            PoseModel poseModel)
+            ImageConverterRegistry converterRegistry)
         {
-            this.camera = camera;
-            this.decoderRegistry = decoderRegistry;
-            this.converterRegistry = converterRegistry;
-            this.poseModel = poseModel;
+            this.camera =
+                camera;
+
+            this.decoderRegistry =
+                decoderRegistry;
+
+            this.converterRegistry =
+                converterRegistry;
         }
 
+
+        // ============================================================
+        // Capture
+        // ============================================================
+
+        // Captures the next frame from the camera.
         public NorthStarFrame CaptureFrame()
         {
             return camera.GetFrame();
         }
 
+
+        // ============================================================
+        // Decode
+        // ============================================================
+
+        // Finds the decoder required for a camera frame.
         public IFrameDecoder GetDecoder(
             NorthStarFrame frame)
         {
@@ -40,14 +65,11 @@ namespace NorthStar.Processing
                 frame.Subtype);
         }
 
+        // Captures and decodes the next camera frame.
         public NorthStarImage DecodeNextFrame()
         {
-            Console.WriteLine("Calling camera.GetFrame...");
-
             NorthStarFrame frame =
                 CaptureFrame();
-
-            Console.WriteLine("camera.GetFrame returned.");
 
             IFrameDecoder decoder =
                 GetDecoder(frame);
@@ -55,15 +77,35 @@ namespace NorthStar.Processing
             return decoder.Decode(frame);
         }
 
+
+        // ============================================================
+        // Conversion
+        // ============================================================
+
+        // Captures, decodes, and converts the next camera frame
+        // to the requested pixel format.
         public NorthStarImage ConvertNextFrameTo(
             NorthStarPixelFormat destinationFormat)
         {
-            Console.WriteLine("Starting DecodeNextFrame...");
-
             NorthStarImage image =
                 DecodeNextFrame();
 
-            Console.WriteLine("DecodeNextFrame returned.");
+            return ConvertImage(
+                image,
+                destinationFormat);
+        }
+
+        // Converts an already-decoded image to the requested
+        // pixel format.
+        public NorthStarImage ConvertImage(
+            NorthStarImage image,
+            NorthStarPixelFormat destinationFormat)
+        {
+            if (image == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(image));
+            }
 
             if (image.PixelFormat ==
                 destinationFormat)
@@ -71,45 +113,27 @@ namespace NorthStar.Processing
                 return image;
             }
 
-            Console.WriteLine(
-                $"Converting {image.PixelFormat} -> {destinationFormat}...");
-
             IImageConverter converter =
                 converterRegistry.GetConverter(
                     image.PixelFormat,
                     destinationFormat);
 
-            NorthStarImage converted =
-                converter.Convert(
-                    image,
-                    destinationFormat);
-
-            Console.WriteLine("Conversion returned.");
-
-            return converted;
+            return converter.Convert(
+                image,
+                destinationFormat);
         }
 
-        // Processes one complete camera frame through the image
-        // and pose-tracking pipeline.
-        public NorthStarTrackingFrame ProcessNextFrame()
+
+        // ============================================================
+        // Frame processing
+        // ============================================================
+
+        // Captures and prepares the next camera frame as a
+        // BGR24 image for downstream consumers.
+        public NorthStarImage ProcessNextFrame()
         {
-            Console.WriteLine("Capturing frame...");
-
-            NorthStarImage image =
-                ConvertNextFrameTo(
-                    NorthStarPixelFormat.BGR24);
-
-            Console.WriteLine("Image ready.");
-
-            PoseResult pose =
-                poseModel.ProcessFrame(
-                    image);
-
-            Console.WriteLine("Pose ready.");
-
-            return new NorthStarTrackingFrame(
-                image,
-                pose);
+            return ConvertNextFrameTo(
+                NorthStarPixelFormat.BGR24);
         }
     }
 }
