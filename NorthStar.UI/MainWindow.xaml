@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="NorthStar.UI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NorthStar.UI"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="NorthStar.UI">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Background="{StaticResource NorthStarDarkGreen}">
+
+        <!-- Main window layout -->
+        <Grid.RowDefinitions>
+            <RowDefinition Height="70" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+
+        <!-- Header -->
+        <Grid
+            Grid.Row="0"
+            Grid.Column="0"
+            Grid.ColumnSpan="2">
+
+            <TextBlock
+                Text="NorthStar"
+                FontSize="32"
+                Foreground="{StaticResource NorthStarGreen}"
+                Grid.Row="0"
+                Grid.Column="0"
+                Grid.ColumnSpan="2"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Margin="20,0,0,0" />
+
+        </Grid>
+
+
+
+        <!-- Control panel -->
+        <Grid
+            Grid.Row="1"
+            Grid.Column="0"
+            Margin="20">
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Panel title -->
+            <TextBlock
+                Text="Controls"
+                FontSize="20"
+                Foreground="{StaticResource NorthStarGreen}"
+                Grid.Row="0"
+                HorizontalAlignment="Center" />
+
+
+            <!-- Camera label -->
+            <TextBlock
+                Text="Camera"
+                Foreground="{StaticResource NorthStarGreen}"
+                Grid.Row="1"
+                Margin="0,10,0,5" />
+
+
+            <!-- Camera selector -->
+            <ComboBox
+                x:Name="CameraSelector"
+                PlaceholderText="Select camera"
+                DisplayMemberPath="Name"
+                Foreground="{StaticResource NorthStarAccent}"
+                Grid.Row="2"
+                HorizontalAlignment="Stretch" 
+                SelectionChanged="CameraSelector_SelectionChanged" />
+
+            <!-- Resolution label -->
+            <TextBlock
+                Text="Resolution"
+                Foreground="{StaticResource NorthStarGreen}"
+                Grid.Row="3"
+                Margin="0,20,0,5" />
+
+            <!-- Resolution selector -->
+            <ComboBox
+                x:Name="ResolutionSelector"
+                PlaceholderText="Select resolution"
+                Foreground="{StaticResource NorthStarAccent}"
+                Grid.Row="4"
+                HorizontalAlignment="Stretch"
+                SelectionChanged="ResolutionSelector_SelectionChanged" />
+
+            <!-- Frame rate label -->
+            <TextBlock
+                Text="Frame Rate"
+                Foreground="{StaticResource NorthStarGreen}"
+                Grid.Row="5"
+                Margin="0,20,0,5" />
+
+            <!-- Frame rate selector -->
+            <ComboBox
+                x:Name="FrameRateSelector"
+                PlaceholderText="Select frame rate"
+                Foreground="{StaticResource NorthStarAccent}"
+                Grid.Row="6"
+                HorizontalAlignment="Stretch"
+                SelectionChanged="FrameRateSelector_SelectionChanged" />
+
+            <!-- Format label -->
+            <TextBlock
+                Text="Format"
+                Foreground="{StaticResource NorthStarGreen}"
+                Grid.Row="7"
+                Margin="0,20,0,5" />
+
+            <!-- Format selector -->
+            <ComboBox
+                x:Name="FormatSelector"
+                PlaceholderText="Select format"
+                Foreground="{StaticResource NorthStarAccent}"
+                Grid.Row="8"
+                HorizontalAlignment="Stretch"
+                SelectionChanged="FormatSelector_SelectionChanged"/>
+
+            <Button
+                x:Name="StartPreviewButton"
+                Content="Start Preview"
+                Grid.Row="9"
+                Margin="0,20,0,0"
+                HorizontalAlignment="Stretch"
+                Click="StartPreviewButton_Click" />
+
+        </Grid>
+
+        <!-- Camera preview -->
+        <Border
+            Grid.Row="1"
+            Grid.Column="1"
+            Margin="20"
+            BorderThickness="1"
+            BorderBrush="{StaticResource NorthStarGreen}">
+
+            <Grid>
+                <Image
+                    x:Name="PreviewImage"
+                    Stretch="Uniform" />
+            </Grid>
+
+        </Border>
+
+
+    </Grid>
+</Window>
+

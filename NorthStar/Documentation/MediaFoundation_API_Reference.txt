@@ -1,0 +1,77 @@
+============================================================
+NorthStar - Media Foundation API Reference
+============================================================
+
+
+MEDIA FOUNDATION LIFECYCLE
+
+MFStartup
+Initializes the Media Foundation platform.
+
+MFShutdown
+Shuts down the Media Foundation platform.
+
+
+CAMERA DISCOVERY
+
+MFCreateAttributes
+Creates an attribute store used to configure device discovery.
+
+MFEnumDeviceSources
+Enumerates cameras matching the specified attributes.
+
+
+FRAME ACQUISITION
+
+MFCreateSourceReaderFromMediaSource
+Creates a source reader from a media source.
+Used to configure the stream and retrieve frames.
+
+
+MEDIA TYPE ATTRIBUTES
+
+MF_MT_FRAME_SIZE
+Contains the width and height of the video stream.
+
+MF_MT_FRAME_RATE
+Contains the stream's frame rate as a numerator and denominator.
+
+MF_MT_SUBTYPE
+Identifies the video/pixel format of the stream.
+
+
+MEMORY MANAGEMENT
+
+CoTaskMemFree
+Releases COM task memory allocated by APIs.
+
+
+CAMERA DISCOVERY ATTRIBUTES
+
+MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE
+Identifies the attribute used to specify the desired source type.
+
+MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID
+Identifies video capture devices such as webcams.
+
+MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME
+Identifies the attribute containing the camera's human-readable name.
+
+
+MEDIA FOUNDATION INTERFACES
+
+IMFAttributes
+Stores Media Foundation attributes.
+
+IMFActivate
+Represents an object that can be activated into a Media Foundation object.
+
+IMFMediaSource
+Represents the actual camera/media source.
+
+IMFSourceReader
+Reads media samples from a media source.
+
+IMFMediaType
+Describes a stream's format, including resolution, frame rate,
+and pixel format.

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="NorthStar.UI/NorthStar.UI.csproj" Id="d1a00e1a-44ce-40a8-adc2-7ee349125cfe">
+    <Platform Project="x64" />
+    <Deploy />
+  </Project>
+  <Project Path="NorthStar/NorthStar.csproj" />
+</Solution>

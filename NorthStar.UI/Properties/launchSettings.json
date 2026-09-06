@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NorthStar.UI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "NorthStar.UI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build output
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+arm64/
+[Aa]rtifacts/
+
+# Visual Studio profiling
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# Test results
+TestResults/
+*.trx
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+.nuget/
+
+# Code coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# Generated documentation
+[Dd]ocs/_site/
+
+# Publish output
+publish/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# C# generated files
+*.csproj.user
+
+# Windows generated files
+$RECYCLE.BIN/
