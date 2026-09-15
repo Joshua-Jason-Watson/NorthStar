@@ -169,11 +169,18 @@ namespace NorthStar
                 decoderRegistry.Register(
                     new NV12Decoder());
 
+                decoderRegistry.Register(
+                    new YUY2Decoder());
+
                 ImageConverterRegistry converterRegistry =
                     new ImageConverterRegistry();
 
                 converterRegistry.Register(
                     new NV12Converter());
+
+                converterRegistry.Register(
+                    new YUY2Converter());
+
 
                 newPipeline =
                     new NorthStarPipeline(
