@@ -5,10 +5,12 @@ using Microsoft.UI.Xaml.Controls;
 using NorthStar.Camera;
 using NorthStar.Frames;
 using NorthStar.Tracking;
+using NorthStar.UI.Camera;
 using NorthStar.UI.Rendering;
 
 using System;
 using System.Collections.Generic;
+
 using IOPath = System.IO.Path;
 
 
@@ -28,6 +30,8 @@ namespace NorthStar.UI
         // ============================================================
 
         private readonly WindowsCameraDiscovery cameraDiscovery;
+
+        private readonly CameraCapabilitySelector capabilitySelector;
 
         private IReadOnlyList<CameraDescriptor> cameras =
             Array.Empty<CameraDescriptor>();
@@ -66,6 +70,9 @@ namespace NorthStar.UI
 
             cameraDiscovery =
                 new WindowsCameraDiscovery();
+
+            capabilitySelector =
+                new CameraCapabilitySelector();
 
             previewDisplayTimer =
                 DispatcherQueue.CreateTimer();
@@ -125,25 +132,18 @@ namespace NorthStar.UI
                 return;
             }
 
-            HashSet<string> addedResolutions =
-                new();
+            IReadOnlyList<(int Width, int Height)> resolutions =
+                capabilitySelector.GetResolutions(
+                    camera);
 
             foreach (
-                CameraCapability capability
-                in camera.Capabilities)
+                (int Width, int Height) resolution
+                in resolutions)
             {
-                string key =
-                    $"{capability.Width}x{capability.Height}";
-
-                if (!addedResolutions.Add(key))
-                {
-                    continue;
-                }
-
                 ResolutionSelector.Items.Add(
                     new ResolutionOption(
-                        capability.Width,
-                        capability.Height));
+                        resolution.Width,
+                        resolution.Height));
             }
         }
 
@@ -169,29 +169,18 @@ namespace NorthStar.UI
                 return;
             }
 
-            HashSet<double> addedFrameRates =
-                new();
+            IReadOnlyList<double> frameRates =
+                capabilitySelector.GetFrameRates(
+                    camera,
+                    resolution.Width,
+                    resolution.Height);
 
             foreach (
-                CameraCapability capability
-                in camera.Capabilities)
+                double frameRate
+                in frameRates)
             {
-                if (capability.Width !=
-                        resolution.Width ||
-                    capability.Height !=
-                        resolution.Height)
-                {
-                    continue;
-                }
-
-                if (!addedFrameRates.Add(
-                        capability.FPS))
-                {
-                    continue;
-                }
-
                 FrameRateSelector.Items.Add(
-                    capability.FPS);
+                    frameRate);
             }
         }
 
@@ -222,24 +211,17 @@ namespace NorthStar.UI
                 return;
             }
 
+            IReadOnlyList<CameraCapability> formats =
+                capabilitySelector.GetFormats(
+                    camera,
+                    resolution.Width,
+                    resolution.Height,
+                    frameRate);
+
             foreach (
                 CameraCapability capability
-                in camera.Capabilities)
+                in formats)
             {
-                if (capability.Width !=
-                        resolution.Width ||
-                    capability.Height !=
-                        resolution.Height)
-                {
-                    continue;
-                }
-
-                if (capability.FPS !=
-                    frameRate)
-                {
-                    continue;
-                }
-
                 FormatSelector.Items.Add(
                     new FormatOption(
                         capability));
@@ -453,7 +435,8 @@ namespace NorthStar.UI
             previewRenderer.Render(
                 image);
         }
-            
+
+
         // ============================================================
         // Tracking
         // ============================================================
@@ -484,9 +467,9 @@ namespace NorthStar.UI
         private string GetModelPath()
         {
             return IOPath.Combine(
-                        AppContext.BaseDirectory,
-                        "Models",
-                        "rtmpose-m.onnx");
+                AppContext.BaseDirectory,
+                "Models",
+                "rtmpose-m.onnx");
         }
 
 
