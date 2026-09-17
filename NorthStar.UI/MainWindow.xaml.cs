@@ -102,6 +102,8 @@ namespace NorthStar.UI
 
             LoadCameras();
 
+            UpdateButtonStates();
+
             Closed +=
                 MainWindow_Closed;
         }
@@ -319,6 +321,14 @@ namespace NorthStar.UI
             object sender,
             RoutedEventArgs e)
         {
+            if (runtime != null &&
+                runtime.IsRunning)
+            {
+                StopRuntime();
+
+                return;
+            }
+
             if (CameraSelector.SelectedItem
                 is not CameraDescriptor camera)
             {
@@ -329,8 +339,6 @@ namespace NorthStar.UI
             {
                 return;
             }
-
-            StopRuntime();
 
             CameraCapability capability =
                 selectedCapability;
@@ -356,6 +364,8 @@ namespace NorthStar.UI
                     capability.Height);
 
                 previewDisplayTimer.Start();
+
+                UpdateButtonStates();
             }
             catch
             {
@@ -381,6 +391,8 @@ namespace NorthStar.UI
             currentRuntime?.Dispose();
 
             previewRenderer.Reset();
+
+            UpdateButtonStates();
         }
 
 
@@ -482,10 +494,43 @@ namespace NorthStar.UI
 
             if (runtime.IsTracking)
             {
+                runtime.StopTracking();
+
+                UpdateButtonStates();
+
                 return;
             }
 
             runtime.StartTracking();
+
+            UpdateButtonStates();
+        }
+
+
+        // ============================================================
+        // Button state
+        // ============================================================
+
+        private void UpdateButtonStates()
+        {
+            bool previewRunning =
+                runtime?.IsRunning == true;
+
+            bool trackingRunning =
+                runtime?.IsTracking == true;
+
+            StartPreviewButton.Content =
+                previewRunning
+                    ? "Stop Preview"
+                    : "Start Preview";
+
+            StartTrackingButton.Content =
+                trackingRunning
+                    ? "Stop Tracking"
+                    : "Start Tracking";
+
+            StartTrackingButton.IsEnabled =
+                previewRunning;
         }
 
 
