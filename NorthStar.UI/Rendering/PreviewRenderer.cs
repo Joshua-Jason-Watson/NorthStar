@@ -10,6 +10,7 @@ using NorthStar.Tracking;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace NorthStar.UI.Rendering
 {

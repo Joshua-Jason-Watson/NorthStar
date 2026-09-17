@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using IOPath = System.IO.Path;
 
+
 namespace NorthStar.UI
 {
     public sealed partial class MainWindow : Window
