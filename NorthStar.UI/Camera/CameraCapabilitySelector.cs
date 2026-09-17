@@ -1,6 +1,5 @@
 ﻿using NorthStar.Camera;
 
-using System;
 using System.Collections.Generic;
 
 namespace NorthStar.UI.Camera
@@ -10,21 +9,32 @@ namespace NorthStar.UI.Camera
         public IReadOnlyList<(int Width, int Height)> GetResolutions(
             CameraDescriptor camera)
         {
-            HashSet<(int Width, int Height)> resolutions =
+            List<(int Width, int Height)> resolutions =
+                new();
+
+            HashSet<(int Width, int Height)> addedResolutions =
                 new();
 
             foreach (
                 CameraCapability capability
                 in camera.Capabilities)
             {
-                resolutions.Add(
+                (int Width, int Height) resolution =
                     (
                         capability.Width,
-                        capability.Height));
+                        capability.Height);
+
+                if (!addedResolutions.Add(
+                        resolution))
+                {
+                    continue;
+                }
+
+                resolutions.Add(
+                    resolution);
             }
 
-            return new List<(int Width, int Height)>(
-                resolutions);
+            return resolutions;
         }
 
 
@@ -33,7 +43,10 @@ namespace NorthStar.UI.Camera
             int width,
             int height)
         {
-            HashSet<double> frameRates =
+            List<double> frameRates =
+                new();
+
+            HashSet<double> addedFrameRates =
                 new();
 
             foreach (
@@ -46,12 +59,17 @@ namespace NorthStar.UI.Camera
                     continue;
                 }
 
+                if (!addedFrameRates.Add(
+                        capability.FPS))
+                {
+                    continue;
+                }
+
                 frameRates.Add(
                     capability.FPS);
             }
 
-            return new List<double>(
-                frameRates);
+            return frameRates;
         }
 
 
