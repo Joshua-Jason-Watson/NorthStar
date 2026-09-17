@@ -212,26 +212,45 @@ namespace NorthStar.Tracking
                 {
                     return;
                 }
-
-                cancellationSource =
-                    null;
-
-                processingTask =
-                    null;
             }
 
             source.Cancel();
 
             try
             {
-                task.Wait(
-                    TimeSpan.FromSeconds(2));
+                task.Wait();
             }
             catch (AggregateException exception)
             {
                 exception.Handle(
                     innerException =>
                         innerException is OperationCanceledException);
+            }
+
+            bool completedShutdown = false;
+
+            lock (processingLock)
+            {
+                if (ReferenceEquals(
+                        cancellationSource,
+                        source) &&
+                    ReferenceEquals(
+                        processingTask,
+                        task))
+                {
+                    cancellationSource =
+                        null;
+
+                    processingTask =
+                        null;
+
+                    completedShutdown = true;
+                }
+            }
+
+            if (!completedShutdown)
+            {
+                return;
             }
 
             source.Dispose();

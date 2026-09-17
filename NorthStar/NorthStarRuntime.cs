@@ -398,17 +398,22 @@ namespace NorthStar
 
             StopTracking();
 
-            cancellationSource?.Cancel();
+            CancellationTokenSource? source =
+                cancellationSource;
 
             Task? task =
                 processingTask;
+
+            if (source != null)
+            {
+                source.Cancel();
+            }
 
             if (task != null)
             {
                 try
                 {
-                    task.Wait(
-                        TimeSpan.FromSeconds(2));
+                    task.Wait();
                 }
                 catch (AggregateException exception)
                 {
@@ -421,8 +426,10 @@ namespace NorthStar
             processingTask =
                 null;
 
-            cancellationSource?.Dispose();
-            cancellationSource = null;
+            cancellationSource =
+                null;
+
+            source?.Dispose();
 
             camera?.Dispose();
             camera = null;
