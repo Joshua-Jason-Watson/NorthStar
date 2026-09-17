@@ -6,125 +6,59 @@
     <Application.Resources>
         <ResourceDictionary>
 
-            <ResourceDictionary.ThemeDictionaries>
+            <!-- NorthStar colors -->
 
-                <!-- Dark Theme -->
-                <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush
+                x:Key="NorthStarGreen"
+                Color="#00FF00" />
 
-                    <!-- NorthStar colors -->
-                    <SolidColorBrush
-                        x:Key="NorthStarGreen"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="NorthStarDarkGreen"
+                Color="#0B140B" />
 
-                    <SolidColorBrush
-                        x:Key="NorthStarDarkGreen"
-                        Color="#0B140B" />  
-
-
-                    <SolidColorBrush
-                        x:Key="NorthStarAccent"
-                        Color="#FF00FF" />
+            <SolidColorBrush
+                x:Key="NorthStarAccent"
+                Color="#FF00FF" />
 
 
-                    <!-- ComboBox styling -->
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForeground"
-                        Color="#00FF00" />
+            <!-- ComboBox styling -->
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForegroundPointerOver"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxPlaceHolderForeground"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForegroundPressed"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxPlaceHolderForegroundPointerOver"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForegroundFocused"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxPlaceHolderForegroundPressed"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForeground"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxPlaceHolderForegroundFocused"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundPointerOver"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxItemForeground"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundSelected"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxItemForegroundPointerOver"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundSelectedPointerOver"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxItemForegroundSelected"
+                Color="#00FF00" />
 
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundPressed"
-                        Color="#00FF00" />
+            <SolidColorBrush
+                x:Key="ComboBoxItemForegroundSelectedPointerOver"
+                Color="#00FF00" />
 
-                </ResourceDictionary>
-
-
-                <!-- Light Theme -->
-                <ResourceDictionary x:Key="Light">
-
-                    <!-- NorthStar colors -->
-                    <SolidColorBrush
-                        x:Key="NorthStarGreen"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="NorthStarDarkGreen"
-                        Color="#0B140B" />
-
-                    <SolidColorBrush
-                        x:Key="NorthStarAccent"
-                        Color="#FF00FF" />
-
-
-                    <!-- ComboBox styling -->
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForeground"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForegroundPointerOver"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForegroundPressed"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxPlaceHolderForegroundFocused"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForeground"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundPointerOver"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundSelected"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundSelectedPointerOver"
-                        Color="#00FF00" />
-
-                    <SolidColorBrush
-                        x:Key="ComboBoxItemForegroundPressed"
-                        Color="#00FF00" />
-
-                </ResourceDictionary>
-
-            </ResourceDictionary.ThemeDictionaries>
+            <SolidColorBrush
+                x:Key="ComboBoxItemForegroundPressed"
+                Color="#00FF00" />
 
         </ResourceDictionary>
     </Application.Resources>
 </Application>
-
