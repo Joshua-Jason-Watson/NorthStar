@@ -1,8 +1,11 @@
 ﻿using Microsoft.ML.OnnxRuntime;
+
 using NorthStar.Frames;
 using NorthStar.Processing;
+
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 
 namespace NorthStar.Tracking
@@ -33,6 +36,7 @@ namespace NorthStar.Tracking
         private readonly string inputName;
 
         private bool disposed;
+
 
         public PoseModel(
             string modelPath)
@@ -126,6 +130,7 @@ namespace NorthStar.Tracking
             }
         }
 
+
         public void PrintModelInfo()
         {
             ThrowIfDisposed();
@@ -163,8 +168,19 @@ namespace NorthStar.Tracking
             }
         }
 
+
         public PoseResult ProcessFrame(
             NorthStarImage image)
+        {
+            return ProcessFrame(
+                image,
+                out _);
+        }
+
+
+        public PoseResult ProcessFrame(
+            NorthStarImage image,
+            out PoseModelMetrics metrics)
         {
             ThrowIfDisposed();
 
@@ -174,9 +190,29 @@ namespace NorthStar.Tracking
                     nameof(image));
             }
 
+            long totalStartTimestamp =
+                Stopwatch.GetTimestamp();
+
+
+            // ========================================================
+            // Preprocessing
+            // ========================================================
+
+            long preprocessingStartTimestamp =
+                Stopwatch.GetTimestamp();
+
             PreprocessResult preprocessResult =
                 preprocessor.CreateTensor(
                     image);
+
+            double preprocessingMilliseconds =
+                GetElapsedMilliseconds(
+                    preprocessingStartTimestamp);
+
+
+            // ========================================================
+            // Inference
+            // ========================================================
 
             NamedOnnxValue input =
                 NamedOnnxValue.CreateFromTensor(
@@ -189,13 +225,41 @@ namespace NorthStar.Tracking
                     input
                 };
 
-            using IDisposableReadOnlyCollection<DisposableNamedOnnxValue> results =
+            long inferenceStartTimestamp =
+                Stopwatch.GetTimestamp();
+
+            using IDisposableReadOnlyCollection<
+                DisposableNamedOnnxValue> results =
                 session!.Run(
                     inputs);
+
+            double inferenceMilliseconds =
+                GetElapsedMilliseconds(
+                    inferenceStartTimestamp);
+
+
+            // ========================================================
+            // Pose decoding
+            // ========================================================
+
+            long poseDecodeStartTimestamp =
+                Stopwatch.GetTimestamp();
 
             PoseDecodeResult decodedPose =
                 decoder.Decode(
                     results);
+
+            double poseDecodeMilliseconds =
+                GetElapsedMilliseconds(
+                    poseDecodeStartTimestamp);
+
+
+            // ========================================================
+            // Coordinate transformation
+            // ========================================================
+
+            long coordinateTransformStartTimestamp =
+                Stopwatch.GetTimestamp();
 
             List<Landmark> transformedLandmarks =
                 new List<Landmark>(
@@ -227,9 +291,31 @@ namespace NorthStar.Tracking
                         landmark.Confidence));
             }
 
+            double coordinateTransformMilliseconds =
+                GetElapsedMilliseconds(
+                    coordinateTransformStartTimestamp);
+
+
+            // ========================================================
+            // Result
+            // ========================================================
+
+            double totalMilliseconds =
+                GetElapsedMilliseconds(
+                    totalStartTimestamp);
+
+            metrics =
+                new PoseModelMetrics(
+                    preprocessingMilliseconds,
+                    inferenceMilliseconds,
+                    poseDecodeMilliseconds,
+                    coordinateTransformMilliseconds,
+                    totalMilliseconds);
+
             return new PoseResult(
                 transformedLandmarks);
         }
+
 
         public void Dispose()
         {
@@ -247,11 +333,26 @@ namespace NorthStar.Tracking
                 this);
         }
 
+
         private void ThrowIfDisposed()
         {
             ObjectDisposedException.ThrowIf(
                 disposed,
                 this);
+        }
+
+
+        private static double GetElapsedMilliseconds(
+            long startTimestamp)
+        {
+            long elapsedTimestamp =
+                Stopwatch.GetTimestamp() -
+                startTimestamp;
+
+            return
+                elapsedTimestamp *
+                1000.0 /
+                Stopwatch.Frequency;
         }
     }
 }

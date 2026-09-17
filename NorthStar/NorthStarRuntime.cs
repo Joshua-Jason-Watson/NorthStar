@@ -5,6 +5,7 @@ using NorthStar.Formats;
 using NorthStar.Frames;
 using NorthStar.Processing;
 using NorthStar.Tracking;
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -64,6 +65,17 @@ namespace NorthStar
 
 
         // ============================================================
+        // Latest pipeline metrics
+        // ============================================================
+
+        private readonly object pipelineMetricsLock =
+            new object();
+
+        private NorthStarPipelineMetrics?
+            latestPipelineMetrics;
+
+
+        // ============================================================
         // Constructor
         // ============================================================
 
@@ -115,6 +127,30 @@ namespace NorthStar
 
         public NorthStarTrackingFrame? LatestFrame =>
             processor?.LatestFrame;
+
+
+        // ============================================================
+        // Latest pipeline metrics
+        // ============================================================
+
+        public NorthStarPipelineMetrics? LatestPipelineMetrics
+        {
+            get
+            {
+                lock (pipelineMetricsLock)
+                {
+                    return latestPipelineMetrics;
+                }
+            }
+        }
+
+
+        // ============================================================
+        // Latest pose-model metrics
+        // ============================================================
+
+        public PoseModelMetrics? LatestPoseModelMetrics =>
+            processor?.LatestPoseModelMetrics;
 
 
         // ============================================================
@@ -306,12 +342,19 @@ namespace NorthStar
                 while (!token.IsCancellationRequested)
                 {
                     NorthStarImage image =
-                        pipeline!.ProcessNextFrame();
+                        pipeline!.ProcessNextFrame(
+                            out NorthStarPipelineMetrics metrics);
 
                     lock (imageLock)
                     {
                         latestImage =
                             image;
+                    }
+
+                    lock (pipelineMetricsLock)
+                    {
+                        latestPipelineMetrics =
+                            metrics;
                     }
 
                     processor?.SubmitFrame(
@@ -389,6 +432,12 @@ namespace NorthStar
             lock (imageLock)
             {
                 latestImage =
+                    null;
+            }
+
+            lock (pipelineMetricsLock)
+            {
+                latestPipelineMetrics =
                     null;
             }
         }

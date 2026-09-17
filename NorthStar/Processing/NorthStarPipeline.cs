@@ -4,6 +4,9 @@ using NorthStar.Decoding;
 using NorthStar.Formats;
 using NorthStar.Frames;
 
+using System;
+using System.Diagnostics;
+
 namespace NorthStar.Processing
 {
     // Coordinates camera capture, frame decoding, and image
@@ -68,13 +71,32 @@ namespace NorthStar.Processing
         // Captures and decodes the next camera frame.
         public NorthStarImage DecodeNextFrame()
         {
+            return DecodeNextFrame(
+                out _);
+        }
+
+        // Captures and decodes the next camera frame while
+        // reporting the time spent on the decode stage.
+        public NorthStarImage DecodeNextFrame(
+            out double decodeMilliseconds)
+        {
+            long startTimestamp =
+                Stopwatch.GetTimestamp();
+
             NorthStarFrame frame =
                 CaptureFrame();
 
             IFrameDecoder decoder =
                 GetDecoder(frame);
 
-            return decoder.Decode(frame);
+            NorthStarImage image =
+                decoder.Decode(frame);
+
+            decodeMilliseconds =
+                GetElapsedMilliseconds(
+                    startTimestamp);
+
+            return image;
         }
 
 
@@ -132,8 +154,84 @@ namespace NorthStar.Processing
         // BGR24 image for downstream consumers.
         public NorthStarImage ProcessNextFrame()
         {
-            return ConvertNextFrameTo(
-                NorthStarPixelFormat.BGR24);
+            return ProcessNextFrame(
+                out _);
+        }
+
+        // Captures and prepares the next camera frame as a
+        // BGR24 image while reporting timing information for
+        // each stage.
+        public NorthStarImage ProcessNextFrame(
+            out NorthStarPipelineMetrics metrics)
+        {
+            long totalStartTimestamp =
+                Stopwatch.GetTimestamp();
+
+            long captureStartTimestamp =
+                Stopwatch.GetTimestamp();
+
+            NorthStarFrame frame =
+                CaptureFrame();
+
+            double captureMilliseconds =
+                GetElapsedMilliseconds(
+                    captureStartTimestamp);
+
+            long decodeStartTimestamp =
+                Stopwatch.GetTimestamp();
+
+            IFrameDecoder decoder =
+                GetDecoder(frame);
+
+            NorthStarImage image =
+                decoder.Decode(frame);
+
+            double decodeMilliseconds =
+                GetElapsedMilliseconds(
+                    decodeStartTimestamp);
+
+            long conversionStartTimestamp =
+                Stopwatch.GetTimestamp();
+
+            NorthStarImage convertedImage =
+                ConvertImage(
+                    image,
+                    NorthStarPixelFormat.BGR24);
+
+            double conversionMilliseconds =
+                GetElapsedMilliseconds(
+                    conversionStartTimestamp);
+
+            double totalMilliseconds =
+                GetElapsedMilliseconds(
+                    totalStartTimestamp);
+
+            metrics =
+                new NorthStarPipelineMetrics(
+                    captureMilliseconds,
+                    decodeMilliseconds,
+                    conversionMilliseconds,
+                    totalMilliseconds);
+
+            return convertedImage;
+        }
+
+
+        // ============================================================
+        // Timing
+        // ============================================================
+
+        private static double GetElapsedMilliseconds(
+            long startTimestamp)
+        {
+            long elapsedTimestamp =
+                Stopwatch.GetTimestamp() -
+                startTimestamp;
+
+            return
+                elapsedTimestamp *
+                1000.0 /
+                Stopwatch.Frequency;
         }
     }
 }

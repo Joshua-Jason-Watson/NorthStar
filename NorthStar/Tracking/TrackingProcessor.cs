@@ -1,4 +1,5 @@
 ﻿using NorthStar.Frames;
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,6 +55,16 @@ namespace NorthStar.Tracking
 
 
         // ============================================================
+        // Latest metrics
+        // ============================================================
+
+        private readonly object metricsLock =
+            new object();
+
+        private PoseModelMetrics? latestPoseModelMetrics;
+
+
+        // ============================================================
         // Constructor
         // ============================================================
 
@@ -94,6 +105,22 @@ namespace NorthStar.Tracking
                 lock (frameLock)
                 {
                     return latestFrame;
+                }
+            }
+        }
+
+
+        // ============================================================
+        // Latest pose-model metrics
+        // ============================================================
+
+        public PoseModelMetrics? LatestPoseModelMetrics
+        {
+            get
+            {
+                lock (metricsLock)
+                {
+                    return latestPoseModelMetrics;
                 }
             }
         }
@@ -202,6 +229,12 @@ namespace NorthStar.Tracking
                 latestImage =
                     null;
             }
+
+            lock (metricsLock)
+            {
+                latestPoseModelMetrics =
+                    null;
+            }
         }
 
 
@@ -228,7 +261,14 @@ namespace NorthStar.Tracking
 
                     PoseResult pose =
                         poseModel.ProcessFrame(
-                            image);
+                            image,
+                            out PoseModelMetrics metrics);
+
+                    lock (metricsLock)
+                    {
+                        latestPoseModelMetrics =
+                            metrics;
+                    }
 
                     NorthStarTrackingFrame frame =
                         new NorthStarTrackingFrame(
@@ -312,6 +352,12 @@ namespace NorthStar.Tracking
             lock (frameLock)
             {
                 latestFrame =
+                    null;
+            }
+
+            lock (metricsLock)
+            {
+                latestPoseModelMetrics =
                     null;
             }
 
