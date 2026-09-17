@@ -1,6 +1,7 @@
 ﻿using NorthStar.Frames;
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,8 +12,19 @@ namespace NorthStar.Tracking
     //
     // The processor owns pose tracking only. It does not capture
     // camera frames or perform image decoding/conversion.
+    //
+    // Landmarks below the minimum confidence threshold are excluded
+    // from the tracking result.
     public sealed class TrackingProcessor : IDisposable
     {
+        // ============================================================
+        // Configuration
+        // ============================================================
+
+        private const float MinimumConfidence =
+            0.50f;
+
+
         // ============================================================
         // Dependencies
         // ============================================================
@@ -235,6 +247,12 @@ namespace NorthStar.Tracking
                 latestPoseModelMetrics =
                     null;
             }
+
+            lock (frameLock)
+            {
+                latestFrame =
+                    null;
+            }
         }
 
 
@@ -270,10 +288,14 @@ namespace NorthStar.Tracking
                             metrics;
                     }
 
+                    PoseResult filteredPose =
+                        FilterPose(
+                            pose);
+
                     NorthStarTrackingFrame frame =
                         new NorthStarTrackingFrame(
                             image,
-                            pose);
+                            filteredPose);
 
                     lock (frameLock)
                     {
@@ -297,6 +319,36 @@ namespace NorthStar.Tracking
                     this,
                     exception);
             }
+        }
+
+
+        // ============================================================
+        // Confidence filtering
+        // ============================================================
+
+        private static PoseResult FilterPose(
+            PoseResult pose)
+        {
+            List<Landmark> filteredLandmarks =
+                new List<Landmark>(
+                    pose.Landmarks.Count);
+
+            foreach (
+                Landmark landmark
+                in pose.Landmarks)
+            {
+                if (landmark.Confidence <
+                    MinimumConfidence)
+                {
+                    continue;
+                }
+
+                filteredLandmarks.Add(
+                    landmark);
+            }
+
+            return new PoseResult(
+                filteredLandmarks);
         }
 
 

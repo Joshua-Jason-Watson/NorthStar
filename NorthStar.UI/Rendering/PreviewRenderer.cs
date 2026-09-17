@@ -23,7 +23,7 @@ namespace NorthStar.UI.Rendering
 
         private byte[]? previewPixels;
 
-        private readonly List<Ellipse> landmarkDots =
+        private readonly Dictionary<int, Ellipse> landmarkDots =
             new();
 
 
@@ -94,17 +94,15 @@ namespace NorthStar.UI.Rendering
 
             ClearTrackingOverlay();
 
-            while (landmarkDots.Count > 0)
+            foreach (
+                Ellipse dot
+                in landmarkDots.Values)
             {
-                Ellipse dot =
-                    landmarkDots[^1];
-
                 trackingOverlay.Children.Remove(
                     dot);
-
-                landmarkDots.RemoveAt(
-                    landmarkDots.Count - 1);
             }
+
+            landmarkDots.Clear();
         }
 
 
@@ -211,39 +209,34 @@ namespace NorthStar.UI.Rendering
         }
 
 
-        private void EnsureLandmarkDots(
-            int count)
+        private Ellipse GetLandmarkDot(
+            int keypointID)
         {
-            while (landmarkDots.Count < count)
+            if (landmarkDots.TryGetValue(
+                    keypointID,
+                    out Ellipse? existingDot))
             {
-                Ellipse dot =
-                    new Ellipse
-                    {
-                        Width = 8,
-                        Height = 8,
-                        Fill =
-                            new SolidColorBrush(
-                                Microsoft.UI.Colors.Red)
-                    };
-
-                trackingOverlay.Children.Add(
-                    dot);
-
-                landmarkDots.Add(
-                    dot);
+                return existingDot;
             }
 
-            while (landmarkDots.Count > count)
-            {
-                Ellipse dot =
-                    landmarkDots[^1];
+            Ellipse dot =
+                new Ellipse
+                {
+                    Width = 8,
+                    Height = 8,
+                    Fill =
+                        new SolidColorBrush(
+                            Microsoft.UI.Colors.Red)
+                };
 
-                trackingOverlay.Children.Remove(
-                    dot);
+            trackingOverlay.Children.Add(
+                dot);
 
-                landmarkDots.RemoveAt(
-                    landmarkDots.Count - 1);
-            }
+            landmarkDots.Add(
+                keypointID,
+                dot);
+
+            return dot;
         }
 
 
@@ -251,7 +244,7 @@ namespace NorthStar.UI.Rendering
         {
             foreach (
                 Ellipse dot
-                in landmarkDots)
+                in landmarkDots.Values)
             {
                 dot.Visibility =
                     Visibility.Collapsed;
@@ -268,8 +261,7 @@ namespace NorthStar.UI.Rendering
             NorthStarImage image =
                 trackingFrame.Image;
 
-            EnsureLandmarkDots(
-                pose.Landmarks.Count);
+            ClearTrackingOverlay();
 
             double imageWidth =
                 previewImage.ActualWidth;
@@ -314,16 +306,13 @@ namespace NorthStar.UI.Rendering
                     displayedHeight) /
                 2.0;
 
-            for (
-                int i = 0;
-                i < pose.Landmarks.Count;
-                i++)
+            foreach (
+                Landmark landmark
+                in pose.Landmarks)
             {
-                Landmark landmark =
-                    pose.Landmarks[i];
-
                 Ellipse dot =
-                    landmarkDots[i];
+                    GetLandmarkDot(
+                        landmark.KeypointID);
 
                 double x =
                     offsetX +
