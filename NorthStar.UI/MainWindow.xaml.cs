@@ -6,6 +6,7 @@ using NorthStar.Camera;
 using NorthStar.Frames;
 using NorthStar.Tracking;
 using NorthStar.UI.Camera;
+using NorthStar.UI.Pages;
 using NorthStar.UI.Rendering;
 
 using System;
@@ -49,6 +50,13 @@ namespace NorthStar.UI
 
 
         // ============================================================
+        // Developer page
+        // ============================================================
+
+        private readonly DevPage devPage;
+
+
+        // ============================================================
         // Window state
         // ============================================================
 
@@ -67,6 +75,12 @@ namespace NorthStar.UI
                 new PreviewRenderer(
                     PreviewImage,
                     TrackingOverlay);
+
+            devPage =
+                new DevPage();
+
+            DevFrame.Content =
+                devPage;
 
             cameraDiscovery =
                 new WindowsCameraDiscovery();
@@ -334,6 +348,9 @@ namespace NorthStar.UI
                 runtime =
                     newRuntime;
 
+                devPage.SetRuntime(
+                    runtime);
+
                 previewRenderer.Initialize(
                     capability.Width,
                     capability.Height);
@@ -357,6 +374,9 @@ namespace NorthStar.UI
 
             runtime =
                 null;
+
+            devPage.SetRuntime(
+                null);
 
             currentRuntime?.Dispose();
 
@@ -406,6 +426,43 @@ namespace NorthStar.UI
 
             previewRenderer.Render(
                 image);
+        }
+
+
+        // ============================================================
+        // Developer page
+        // ============================================================
+
+        private void DevButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (DevFrame.Visibility ==
+                Visibility.Visible)
+            {
+                DevFrame.Visibility =
+                    Visibility.Collapsed;
+
+                MainView.Visibility =
+                    Visibility.Visible;
+
+                DevButton.Content =
+                    "Dev";
+
+                return;
+            }
+
+            MainView.Visibility =
+                Visibility.Collapsed;
+
+            DevFrame.Visibility =
+                Visibility.Visible;
+
+            DevButton.Content =
+                "Main";
+
+            devPage.SetRuntime(
+                runtime);
         }
 
 
@@ -460,6 +517,8 @@ namespace NorthStar.UI
 
             previewDisplayTimer.Tick -=
                 PreviewDisplayTimer_Tick;
+
+            devPage.Dispose();
         }
     }
 }
