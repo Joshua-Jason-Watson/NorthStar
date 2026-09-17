@@ -34,6 +34,11 @@ namespace NorthStar.Camera
         // Media Foundation subtype identifying the native video format.
         public Guid Subtype { get; }
 
+        // Human-readable name for the native video format.
+        public string FormatName =>
+            GetFormatName(
+                Subtype);
+
         public string DisplayName =>
             $"{Width} × {Height} @ {FPS:F2} FPS";
 
@@ -95,12 +100,39 @@ namespace NorthStar.Camera
                 subtype;
         }
 
+        private static string GetFormatName(
+            Guid subtype)
+        {
+            if (subtype ==
+                new Guid(
+                    "3231564E-0000-0010-8000-00AA00389B71"))
+            {
+                return "NV12";
+            }
+
+            if (subtype ==
+                new Guid(
+                    "47504A4D-0000-0010-8000-00AA00389B71"))
+            {
+                return "MJPG";
+            }
+
+            if (subtype ==
+                new Guid(
+                    "32595559-0000-0010-8000-00AA00389B71"))
+            {
+                return "YUY2";
+            }
+
+            return subtype.ToString();
+        }
+
         public override string ToString()
         {
             return
                 $"{Width}x{Height} @ " +
                 $"{FPS:F2} FPS - " +
-                $"{Subtype}";
+                $"{FormatName}";
         }
     }
 }

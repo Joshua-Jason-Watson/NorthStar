@@ -281,8 +281,7 @@ namespace NorthStar.UI
             public CameraCapability Capability { get; }
 
             public string DisplayName =>
-                GetFormatName(
-                    Capability.Subtype);
+                Capability.FormatName;
 
             public FormatOption(
                 CameraCapability capability)
@@ -295,33 +294,6 @@ namespace NorthStar.UI
             {
                 return DisplayName;
             }
-        }
-
-        private static string GetFormatName(
-            Guid subtype)
-        {
-            if (subtype ==
-                new Guid(
-                    "3231564E-0000-0010-8000-00AA00389B71"))
-            {
-                return "NV12";
-            }
-
-            if (subtype ==
-                new Guid(
-                    "47504A4D-0000-0010-8000-00AA00389B71"))
-            {
-                return "MJPG";
-            }
-
-            if (subtype ==
-                new Guid(
-                    "32595559-0000-0010-8000-00AA00389B71"))
-            {
-                return "YUY2";
-            }
-
-            return subtype.ToString();
         }
 
 
