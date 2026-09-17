@@ -11,6 +11,7 @@ using NorthStar.UI.Rendering;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 using IOPath = System.IO.Path;
 
@@ -47,6 +48,17 @@ namespace NorthStar.UI
         private readonly DispatcherQueueTimer previewDisplayTimer;
 
         private readonly PreviewRenderer previewRenderer;
+
+
+        // ============================================================
+        // FPS
+        // ============================================================
+
+        private readonly Stopwatch fpsStopwatch;
+
+        private NorthStarImage? lastDisplayedImage;
+
+        private int displayedFrameCount;
 
 
         // ============================================================
@@ -100,9 +112,14 @@ namespace NorthStar.UI
             previewDisplayTimer.Tick +=
                 PreviewDisplayTimer_Tick;
 
+            fpsStopwatch =
+                new Stopwatch();
+
             LoadCameras();
 
             UpdateButtonStates();
+
+            ResetFpsCounter();
 
             Closed +=
                 MainWindow_Closed;
@@ -363,6 +380,8 @@ namespace NorthStar.UI
                     capability.Width,
                     capability.Height);
 
+                ResetFpsCounter();
+
                 previewDisplayTimer.Start();
 
                 UpdateButtonStates();
@@ -391,6 +410,8 @@ namespace NorthStar.UI
             currentRuntime?.Dispose();
 
             previewRenderer.Reset();
+
+            ResetFpsCounter();
 
             UpdateButtonStates();
         }
@@ -425,6 +446,9 @@ namespace NorthStar.UI
                 previewRenderer.Render(
                     trackingFrame);
 
+                UpdateFps(
+                    trackingFrame.Image);
+
                 return;
             }
 
@@ -438,6 +462,72 @@ namespace NorthStar.UI
 
             previewRenderer.Render(
                 image);
+
+            UpdateFps(
+                image);
+        }
+
+
+        // ============================================================
+        // FPS
+        // ============================================================
+
+        private void ResetFpsCounter()
+        {
+            fpsStopwatch.Reset();
+
+            lastDisplayedImage =
+                null;
+
+            displayedFrameCount =
+                0;
+
+            FpsText.Text =
+                "FPS: 0";
+        }
+
+        private void UpdateFps(
+            NorthStarImage image)
+        {
+            if (ReferenceEquals(
+                    image,
+                    lastDisplayedImage))
+            {
+                return;
+            }
+
+            lastDisplayedImage =
+                image;
+
+            displayedFrameCount++;
+
+            if (!fpsStopwatch.IsRunning)
+            {
+                fpsStopwatch.Start();
+
+                return;
+            }
+
+            TimeSpan elapsed =
+                fpsStopwatch.Elapsed;
+
+            if (elapsed <
+                TimeSpan.FromSeconds(1))
+            {
+                return;
+            }
+
+            double framesPerSecond =
+                displayedFrameCount /
+                elapsed.TotalSeconds;
+
+            FpsText.Text =
+                $"FPS: {framesPerSecond:F0}";
+
+            displayedFrameCount =
+                0;
+
+            fpsStopwatch.Restart();
         }
 
 
