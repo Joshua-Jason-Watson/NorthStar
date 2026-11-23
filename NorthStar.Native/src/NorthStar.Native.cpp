@@ -583,6 +583,61 @@ NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelOutputTensorData(
     }
 }
 
+NSN_Status NORTHSTAR_NATIVE_CALL NSN_RunModel(
+    NSN_ModelSession* session)
+{
+    using namespace northstar_native_detail;
+
+    ClearLastError();
+
+    if (session == nullptr)
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_RunModel",
+            "The model session cannot be null.");
+    }
+
+    try
+    {
+        auto run_result =
+            session->compiled_model.Run(
+                session->input_buffers,
+                session->output_buffers);
+
+        if (!run_result.HasValue())
+        {
+            return SetLiteRtFailure(
+                NSN_STATUS_MODEL_INFERENCE_FAILED,
+                "LiteRT CompiledModel::Run",
+                run_result.Error());
+        }
+
+        return NSN_STATUS_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return SetFailure(
+            NSN_STATUS_OUT_OF_MEMORY,
+            "NSN_RunModel",
+            "Memory allocation failed.");
+    }
+    catch (const std::exception& exception)
+    {
+        return SetFailure(
+            NSN_STATUS_INTERNAL_ERROR,
+            "NSN_RunModel",
+            exception.what());
+    }
+    catch (...)
+    {
+        return SetFailure(
+            NSN_STATUS_INTERNAL_ERROR,
+            "NSN_RunModel",
+            "An unknown native exception occurred.");
+    }
+}
+
 NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelInputCount(
     const NSN_ModelSession* session,
     uint32_t* out_count)
