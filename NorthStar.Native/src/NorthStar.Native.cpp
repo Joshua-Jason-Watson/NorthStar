@@ -398,6 +398,191 @@ NSN_Status NORTHSTAR_NATIVE_CALL NSN_SetModelInputTensorData(
     }
 }
 
+NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelOutputTensorDataSize(
+    const NSN_ModelSession* session,
+    uint32_t output_index,
+    uint64_t* out_data_size)
+{
+    using namespace northstar_native_detail;
+
+    ClearLastError();
+
+    if (session == nullptr || out_data_size == nullptr)
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorDataSize",
+            "session and out_data_size cannot be null.");
+    }
+
+    *out_data_size = 0;
+
+    if (output_index >= session->output_buffers.size())
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorDataSize",
+            "The output tensor index is out of range.");
+    }
+
+    try
+    {
+        const litert::TensorBuffer& output_buffer =
+            session->output_buffers[output_index];
+
+        auto packed_size_result =
+            output_buffer.PackedSize();
+
+        if (!packed_size_result.HasValue())
+        {
+            return SetLiteRtFailure(
+                NSN_STATUS_TENSOR_BUFFER_READ_FAILED,
+                "LiteRT TensorBuffer::PackedSize",
+                packed_size_result.Error());
+        }
+
+        *out_data_size =
+            static_cast<uint64_t>(packed_size_result.Value());
+
+        return NSN_STATUS_OK;
+    }
+    catch (const std::exception& exception)
+    {
+        return SetFailure(
+            NSN_STATUS_INTERNAL_ERROR,
+            "NSN_GetModelOutputTensorDataSize",
+            exception.what());
+    }
+    catch (...)
+    {
+        return SetFailure(
+            NSN_STATUS_INTERNAL_ERROR,
+            "NSN_GetModelOutputTensorDataSize",
+            "An unknown native exception occurred.");
+    }
+}
+
+NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelOutputTensorData(
+    NSN_ModelSession* session,
+    uint32_t output_index,
+    void* destination,
+    uint64_t destination_size)
+{
+    using namespace northstar_native_detail;
+
+    ClearLastError();
+
+    if (session == nullptr)
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorData",
+            "The model session cannot be null.");
+    }
+
+    if (output_index >= session->output_buffers.size())
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorData",
+            "The output tensor index is out of range.");
+    }
+
+    if (destination == nullptr || destination_size == 0)
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorData",
+            "The destination cannot be null or empty.");
+    }
+
+    if (destination_size >
+        static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorData",
+            "The destination size exceeds the native size limit.");
+    }
+
+    try
+    {
+        litert::TensorBuffer& output_buffer =
+            session->output_buffers[output_index];
+
+        auto packed_size_result =
+            output_buffer.PackedSize();
+
+        if (!packed_size_result.HasValue())
+        {
+            return SetLiteRtFailure(
+                NSN_STATUS_TENSOR_BUFFER_READ_FAILED,
+                "LiteRT TensorBuffer::PackedSize",
+                packed_size_result.Error());
+        }
+
+        const size_t expected_size =
+            packed_size_result.Value();
+
+        if (destination_size != static_cast<uint64_t>(expected_size))
+        {
+            char message[256]{};
+
+            std::snprintf(
+                message,
+                sizeof(message),
+                "Output tensor %u requires exactly %zu bytes, "
+                "but the destination has %llu bytes.",
+                output_index,
+                expected_size,
+                static_cast<unsigned long long>(destination_size));
+
+            return SetFailure(
+                NSN_STATUS_INVALID_ARGUMENT,
+                "NSN_GetModelOutputTensorData",
+                message);
+        }
+
+        const absl::Span<uint8_t> output_data(
+            static_cast<uint8_t*>(destination),
+            static_cast<size_t>(destination_size));
+
+        auto read_result =
+            output_buffer.Read<uint8_t>(output_data);
+
+        if (!read_result.HasValue())
+        {
+            return SetLiteRtFailure(
+                NSN_STATUS_TENSOR_BUFFER_READ_FAILED,
+                "LiteRT TensorBuffer::Read",
+                read_result.Error());
+        }
+
+        return NSN_STATUS_OK;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return SetFailure(
+            NSN_STATUS_OUT_OF_MEMORY,
+            "NSN_GetModelOutputTensorData",
+            "Memory allocation failed.");
+    }
+    catch (const std::exception& exception)
+    {
+        return SetFailure(
+            NSN_STATUS_INTERNAL_ERROR,
+            "NSN_GetModelOutputTensorData",
+            exception.what());
+    }
+    catch (...)
+    {
+        return SetFailure(
+            NSN_STATUS_INTERNAL_ERROR,
+            "NSN_GetModelOutputTensorData",
+            "An unknown native exception occurred.");
+    }
+}
+
 NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelInputCount(
     const NSN_ModelSession* session,
     uint32_t* out_count)

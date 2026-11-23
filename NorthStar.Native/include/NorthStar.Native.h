@@ -31,7 +31,8 @@ typedef enum NSN_Status
     NSN_STATUS_TENSOR_BUFFER_CREATION_FAILED = 4,
     NSN_STATUS_OUT_OF_MEMORY = 5,
     NSN_STATUS_INTERNAL_ERROR = 6,
-    NSN_STATUS_TENSOR_BUFFER_WRITE_FAILED = 7
+    NSN_STATUS_TENSOR_BUFFER_WRITE_FAILED = 7,
+    NSN_STATUS_TENSOR_BUFFER_READ_FAILED = 8
 } NSN_Status;
 
 // API version 1.0.0 is returned as 0x00010000.
@@ -75,6 +76,21 @@ NSN_SetModelInputTensorData(
     uint32_t input_index,
     const void* data,
     uint64_t data_size);
+
+// Gets the required byte size of a model's output tensor.
+NORTHSTAR_NATIVE_API NSN_Status NORTHSTAR_NATIVE_CALL
+NSN_GetModelOutputTensorDataSize(
+    const NSN_ModelSession* session,
+    uint32_t output_index,
+    uint64_t* out_data_size);
+
+// Copies raw tensor data from a model's output buffer.
+NORTHSTAR_NATIVE_API NSN_Status NORTHSTAR_NATIVE_CALL
+NSN_GetModelOutputTensorData(
+    NSN_ModelSession* session,
+    uint32_t output_index,
+    void* destination,
+    uint64_t destination_size);
 
 // Returns a thread-local UTF-8 error string. Read it immediately after a
 // function returns a non-OK status; the pointer remains valid until the next
