@@ -1,73 +1,119 @@
-﻿using NorthStar.Camera.Interop;
+﻿
+using NorthStar.Camera.Interop;
 using NorthStar.Frames;
+
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.Marshalling;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
 
 namespace NorthStar.Camera
 {
-    // Represents an opened camera and provides access to the
-    // capabilities and frames exposed by Media Foundation.
+    // Represents an opened camera and provides access to its
+    // Media Foundation capabilities and continuously acquired frames.
     //
-    // Media Foundation resources are intentionally kept in their
-    // native/raw form. CameraDevice is the boundary where raw
-    // Media Foundation data becomes managed NorthStar data.
-    public unsafe class CameraDevice : ICamera, IDisposable
+    // Camera acquisition operates independently of frame consumption.
+    // Samples are received through SourceReaderCallback and stored
+    // in its bounded queue.
+    public sealed class CameraDevice : ICamera, IDisposable
     {
-        // Human-readable name of the camera.
+        // ============================================================
+        // Camera information
+        // ============================================================
+
         public string Name { get; }
 
-        // Width of the currently configured camera stream.
         public int Width =>
             currentCapability?.Width ?? 0;
 
-        // Height of the currently configured camera stream.
         public int Height =>
             currentCapability?.Height ?? 0;
 
-        // Frame rate of the currently configured camera stream.
         public double FPS =>
             currentCapability?.FPS ?? 0;
 
-        // Media Foundation activation object owned by this camera.
-        private IMFActivate_unmanaged* activate;
+        public long DroppedFrameCount =>
+            sourceReaderCallback?.DroppedFrameCount ?? 0;
 
-        // Raw IMFMediaSource pointer owned by this camera.
-        private void* mediaSource;
+        public int PendingFrameCount =>
+            sourceReaderCallback?.PendingFrameCount ?? 0;
 
-        // Raw IMFSourceReader wrapper owned by this camera.
+
+        // ============================================================
+        // Native resources
+        // ============================================================
+
+        private nint activatePointer;
+
+        private nint mediaSourcePointer;
+
         private RawSourceReader? sourceReader;
 
-        // Currently configured camera capability.
+        private SourceReaderCallback? sourceReaderCallback;
+
         private CameraCapability? currentCapability;
 
-        // Currently configured media type.
         private RawMediaType? currentMediaType;
 
-        // Stride determined when the camera is configured.
         private int currentStride;
 
-        private bool disposed;
 
-        // Media Foundation's special index for the first video stream.
-        private const uint FirstVideoStream = 0xFFFFFFFC;
+        // ============================================================
+        // Capture state
+        // ============================================================
 
-        // Media Foundation flag indicating a stream tick occurred
-        // without an accompanying media sample.
-        private const uint StreamTickFlag = 0x00000100;
+        // NorthStar currently has one consumer per camera.
+        private readonly SemaphoreSlim frameReadGate =
+            new(1, 1);
 
-        // Media Foundation flag indicating the stream has ended.
-        private const uint EndOfStreamFlag = 0x00000001;
+        private readonly object captureLock =
+            new();
 
-        // HRESULT returned by GetNativeMediaType when there are
-        // no more native media types to enumerate.
+        private bool captureStarted;
+
+        private Task? flushTask;
+
+
+        // ============================================================
+        // Frame timing
+        // ============================================================
+
+        private long? previousFrameTimestamp;
+
+
+        // ============================================================
+        // Disposal
+        // ============================================================
+
+        private int disposed;
+
+
+        // ============================================================
+        // Media Foundation constants
+        // ============================================================
+
+        private const uint FirstVideoStream =
+            0xFFFFFFFC;
+
+        private const uint EndOfStreamFlag =
+            0x00000001;
+
         private const int MfENoMoreTypes =
             unchecked((int)0xC00D36B9);
 
-        internal CameraDevice(
+
+        // ============================================================
+        // Constructor
+        // ============================================================
+
+        internal unsafe CameraDevice(
             string name,
             IMFActivate_unmanaged* activate)
         {
@@ -84,41 +130,95 @@ namespace NorthStar.Camera
                     nameof(activate));
             }
 
-            Name =
-                name;
+            Name = name;
 
-            this.activate =
-                activate;
+            activatePointer = (nint)activate;
+
+            SourceReaderCallback callback =
+                new();
+
+            void* callbackPointer =
+                ComInterfaceMarshaller<IMFSourceReaderCallback>
+                    .ConvertToUnmanaged(callback);
+
+            void* sourceReaderPointer = null;
+
+            bool callbackTransferred = false;
 
             try
             {
                 Guid mediaSourceGuid =
-                    new Guid(
-                        "279A808D-AEC7-40C8-9C6B-A6B492C78A66");
+                    new("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
 
                 // Activate the camera's native IMFMediaSource.
-                mediaSource =
+                void* activatedMediaSource =
                     activate->ActivateObject(
                         mediaSourceGuid);
 
-                if (mediaSource == null)
+                if (activatedMediaSource == null)
                 {
                     throw new InvalidOperationException(
                         "Media Foundation returned a null camera media source.");
                 }
 
-                // Create the source reader using the raw
-                // IMFMediaSource pointer.
-                void* sourceReaderPointer = null;
+                mediaSourcePointer =
+                    (nint)activatedMediaSource;
 
-                HRESULT hr =
-                    MediaFoundationNative
-                        .MFCreateSourceReaderFromMediaSource(
-                            mediaSource,
-                            null,
-                            &sourceReaderPointer);
 
-                hr.ThrowOnFailure();
+                // Create Source Reader attributes.
+                PInvoke.MFCreateAttributes(
+                    out var readerAttributes,
+                    2);
+
+                try
+                {
+                    // Enable low-latency processing.
+                    Guid lowLatencyKey =
+                        PInvoke.MF_LOW_LATENCY;
+
+                    readerAttributes.SetUINT32(
+                        &lowLatencyKey,
+                        1);
+
+
+                    // Register the asynchronous Source Reader callback.
+                    Guid callbackKey =
+                        PInvoke.MF_SOURCE_READER_ASYNC_CALLBACK;
+
+                    SetAttributeUnknown(
+                        readerAttributes,
+                        callbackKey,
+                        callbackPointer);
+
+
+                    nint readerAttributesPointer =
+                        Marshal.GetComInterfaceForObject(
+                            readerAttributes,
+                            typeof(IMFAttributes));
+
+                    try
+                    {
+                        HRESULT hr =
+                            MediaFoundationNative
+                                .MFCreateSourceReaderFromMediaSource(
+                                    (void*)mediaSourcePointer,
+                                    (void*)readerAttributesPointer,
+                                    &sourceReaderPointer);
+
+                        hr.ThrowOnFailure();
+                    }
+                    finally
+                    {
+                        Marshal.Release(
+                            readerAttributesPointer);
+                    }
+                }
+                finally
+                {
+                    Marshal.ReleaseComObject(
+                        readerAttributes);
+                }
+
 
                 if (sourceReaderPointer == null)
                 {
@@ -126,18 +226,91 @@ namespace NorthStar.Camera
                         "Media Foundation returned a null source reader.");
                 }
 
+
+                // Transfer ownership of the Source Reader pointer.
+                void* createdSourceReaderPointer =
+                    sourceReaderPointer;
+
+                sourceReaderPointer = null;
+
                 sourceReader =
                     new RawSourceReader(
-                        sourceReaderPointer);
+                        createdSourceReaderPointer);
+
+
+                // Keep the callback alive for the reader's lifetime.
+                sourceReaderCallback =
+                    callback;
+
+                callbackTransferred = true;
             }
             catch
             {
+                ReleaseComPointer(
+                    (nint)sourceReaderPointer);
+
                 Dispose();
+
                 throw;
+            }
+            finally
+            {
+                ComInterfaceMarshaller<IMFSourceReaderCallback>.Free(
+                    callbackPointer);
+
+                if (!callbackTransferred)
+                {
+                    callback.Dispose();
+                }
             }
         }
 
-        public IReadOnlyList<CameraCapability> GetCapabilities()
+
+        // ============================================================
+        // Media Foundation attribute helpers
+        // ============================================================
+
+        private static unsafe void SetAttributeUnknown(
+            IMFAttributes attributes,
+            Guid key,
+            void* unknown)
+        {
+            nint attributesPointer =
+                Marshal.GetComInterfaceForObject(
+                    attributes,
+                    typeof(IMFAttributes));
+
+            try
+            {
+                void** vtable =
+                    *(void***)attributesPointer;
+
+                HRESULT hr =
+                    ((delegate* unmanaged[Stdcall]<
+                        void*,
+                        Guid*,
+                        void*,
+                        HRESULT>)
+                    vtable[27])(
+                        (void*)attributesPointer,
+                        &key,
+                        unknown);
+
+                hr.ThrowOnFailure();
+            }
+            finally
+            {
+                Marshal.Release(
+                    attributesPointer);
+            }
+        }
+
+
+        // ============================================================
+        // Camera capabilities
+        // ============================================================
+
+        public unsafe IReadOnlyList<CameraCapability> GetCapabilities()
         {
             ThrowIfDisposed();
 
@@ -201,8 +374,9 @@ namespace NorthStar.Camera
                 mediaTypeIndex++;
             }
 
-            return capabilities;
+            return capabilities.AsReadOnly();
         }
+
 
         public CameraCapability SelectCapability(
             int width,
@@ -217,8 +391,7 @@ namespace NorthStar.Camera
             {
                 if (capability.Width == width &&
                     capability.Height == height &&
-                    Math.Abs(
-                        capability.FPS - fps) < 0.01)
+                    Math.Abs(capability.FPS - fps) < 0.01)
                 {
                     return capability;
                 }
@@ -229,15 +402,23 @@ namespace NorthStar.Camera
                 $"{width}x{height} @ {fps:F2} FPS.");
         }
 
-        public void Configure(
+
+        // ============================================================
+        // Camera configuration
+        // ============================================================
+
+        public unsafe void Configure(
             CameraCapability capability)
         {
             ThrowIfDisposed();
 
-            if (capability == null)
+            ArgumentNullException.ThrowIfNull(capability);
+
+            if (currentCapability != null)
             {
-                throw new ArgumentNullException(
-                    nameof(capability));
+                throw new InvalidOperationException(
+                    "The camera has already been configured. " +
+                    "Create a new CameraDevice to select a different capability.");
             }
 
             void* mediaTypePointer = null;
@@ -257,52 +438,44 @@ namespace NorthStar.Camera
             }
 
             RawMediaType mediaType =
-                new RawMediaType(
-                    mediaTypePointer);
+                new(mediaTypePointer);
 
             try
             {
-                // Configure the source reader using the raw
-                // IMFMediaType pointer.
                 hr =
-                    sourceReader.SetCurrentMediaType(
+                    sourceReader.SetNativeMediaType(
                         FirstVideoStream,
-                        mediaType.Pointer);
+                        mediaType.Pointer,
+                        out _);
 
                 hr.ThrowOnFailure();
 
-                // Determine the stride while the media type is
-                // still available.
                 int stride =
                     DetermineStride(
                         mediaType,
                         capability);
 
-                RawMediaType? previousMediaType =
-                    currentMediaType;
+                currentMediaType = mediaType;
 
-                currentMediaType =
-                    mediaType;
+                currentCapability = capability;
 
-                currentCapability =
-                    capability;
+                currentStride = stride;
 
-                currentStride =
-                    stride;
+                previousFrameTimestamp = null;
 
-                // Ownership has transferred to currentMediaType.
-                mediaType =
-                    null!;
-
-                previousMediaType?.Dispose();
+                // Transfer ownership to CameraDevice.
+                mediaType = null!;
             }
             finally
             {
-                // If ownership was not transferred, dispose the
-                // temporary media type here.
                 mediaType?.Dispose();
             }
         }
+
+
+        // ============================================================
+        // Stride calculation
+        // ============================================================
 
         private int DetermineStride(
             RawMediaType mediaType,
@@ -319,11 +492,15 @@ namespace NorthStar.Camera
             if (hr.Succeeded)
             {
                 int stride =
-                    unchecked(
-                        (int)unsignedStride);
+                    unchecked((int)unsignedStride);
 
-                stride =
-                    Math.Abs(stride);
+                if (stride == int.MinValue)
+                {
+                    throw new InvalidOperationException(
+                        "Media Foundation returned an invalid stride.");
+                }
+
+                stride = Math.Abs(stride);
 
                 if (stride > 0)
                 {
@@ -331,8 +508,6 @@ namespace NorthStar.Camera
                 }
             }
 
-            // Ask Media Foundation to calculate the minimum stride
-            // for the configured subtype.
             byte[] subtypeBytes =
                 capability.Subtype.ToByteArray();
 
@@ -349,9 +524,14 @@ namespace NorthStar.Camera
 
             hr.ThrowOnFailure();
 
+            if (calculatedStride == int.MinValue)
+            {
+                throw new InvalidOperationException(
+                    "Media Foundation returned an invalid calculated stride.");
+            }
+
             calculatedStride =
-                Math.Abs(
-                    calculatedStride);
+                Math.Abs(calculatedStride);
 
             if (calculatedStride <= 0)
             {
@@ -364,200 +544,487 @@ namespace NorthStar.Camera
             return calculatedStride;
         }
 
-        private NorthStarFrame ReadSample()
+
+        // ============================================================
+        // Continuous capture startup
+        // ============================================================
+
+        private void EnsureContinuousCaptureStarted()
         {
-            ThrowIfDisposed();
-
-            if (currentCapability == null)
+            lock (captureLock)
             {
-                throw new InvalidOperationException(
-                    "The camera has not been configured.");
-            }
+                ThrowIfDisposed();
 
-            if (currentStride <= 0)
-            {
-                throw new InvalidOperationException(
-                    "The configured camera does not have a valid stride.");
-            }
-
-            while (true)
-            {
-                uint actualStreamIndex = 0;
-                uint streamFlags = 0;
-                long timestamp = 0;
-
-                void* samplePointer = null;
-
-                HRESULT hr =
-                    sourceReader!.ReadSample(
-                        FirstVideoStream,
-                        0,
-                        out actualStreamIndex,
-                        out streamFlags,
-                        out timestamp,
-                        out samplePointer);
-
-                hr.ThrowOnFailure();
-
-                IMFSample_unmanaged* sample =
-                    (IMFSample_unmanaged*)samplePointer;
-
-                if (sample == null)
+                if (captureStarted)
                 {
-                    if ((streamFlags & StreamTickFlag) != 0)
-                    {
-                        continue;
-                    }
+                    return;
+                }
 
-                    if ((streamFlags & EndOfStreamFlag) != 0)
-                    {
-                        throw new InvalidOperationException(
-                            "Media Foundation reached the end " +
-                            "of the video stream.");
-                    }
-
+                if (sourceReader == null ||
+                    sourceReaderCallback == null)
+                {
                     throw new InvalidOperationException(
-                        $"Media Foundation did not return a video sample. " +
-                        $"Stream: {actualStreamIndex}, " +
-                        $"Flags: 0x{streamFlags:X8}, " +
-                        $"Timestamp: {timestamp}");
+                        "The camera's Source Reader has not been initialized.");
+                }
+
+                // Mark the reader as started before issuing the first
+                // request so disposal can flush it if startup fails.
+                captureStarted = true;
+
+                sourceReader.StartContinuousCapture(
+                    FirstVideoStream,
+                    sourceReaderCallback);
+            }
+        }
+
+
+        // ============================================================
+        // Camera flush
+        // ============================================================
+
+        // Flush is a stream-lifecycle operation.
+        //
+        // Cancelling an individual frame consumer does not call this.
+        // The continuous stream is flushed when the camera is disposed.
+        private Task RequestFlushAsync()
+        {
+            lock (captureLock)
+            {
+                if (!captureStarted)
+                {
+                    return Task.CompletedTask;
+                }
+
+                if (flushTask != null)
+                {
+                    return flushTask;
+                }
+
+                if (sourceReader == null ||
+                    sourceReaderCallback == null)
+                {
+                    return Task.CompletedTask;
                 }
 
                 try
                 {
+                    flushTask =
+                        sourceReader.FlushAsync(
+                            FirstVideoStream,
+                            sourceReaderCallback);
+                }
+                catch (Exception exception)
+                {
+                    flushTask =
+                        Task.FromException(exception);
+                }
+
+                return flushTask;
+            }
+        }
+
+
+        // ============================================================
+        // Asynchronous frame acquisition
+        // ============================================================
+
+        public async Task<(
+            NorthStarFrame Frame,
+            CameraCaptureMetrics CaptureMetrics)> GetFrameAsync(
+                CancellationToken cancellationToken)
+        {
+            ThrowIfDisposed();
+
+            await frameReadGate
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            try
+            {
+                ThrowIfDisposed();
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                CameraCapability capability =
+                    currentCapability
+                    ?? throw new InvalidOperationException(
+                        "The camera has not been configured.");
+
+                if (currentStride <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "The configured camera does not have a valid stride.");
+                }
+
+                EnsureContinuousCaptureStarted();
+
+
+                // Time spent waiting for an already-running
+                // continuous capture stream to provide a sample.
+                long queueWaitStart =
+                    Stopwatch.GetTimestamp();
+
+                SourceReaderSampleResult result =
+                    await sourceReaderCallback!.TakeSampleAsync(
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                double sampleQueueWaitMilliseconds =
+                    GetElapsedMilliseconds(queueWaitStart);
+
+
+                bool sampleOwnershipTransferred = false;
+
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    ThrowIfDisposed();
+
+                    if (result.SamplePointer == 0)
+                    {
+                        if ((result.StreamFlags & EndOfStreamFlag) != 0)
+                        {
+                            throw new InvalidOperationException(
+                                "Media Foundation reached the end " +
+                                "of the camera stream.");
+                        }
+
+                        throw new InvalidOperationException(
+                            "Media Foundation returned a sample without a buffer.");
+                    }
+
+
+                    // CreateFrameFromSample assumes ownership of
+                    // the retained COM sample reference.
+                    sampleOwnershipTransferred = true;
+
+                    (
+                        NorthStarFrame Frame,
+                        CameraCaptureMetrics CaptureMetrics
+                    ) capturedFrame =
+                        CreateFrameFromSample(
+                            result,
+                            capability,
+                            sampleQueueWaitMilliseconds);
+
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    ThrowIfDisposed();
+
+                    return capturedFrame;
+                }
+                finally
+                {
+                    if (!sampleOwnershipTransferred &&
+                        result.SamplePointer != 0)
+                    {
+                        ReleaseSample(
+                            result.SamplePointer);
+                    }
+                }
+            }
+            finally
+            {
+                frameReadGate.Release();
+            }
+        }
+
+
+        // ============================================================
+        // Sample processing
+        // ============================================================
+
+        private unsafe (
+            NorthStarFrame Frame,
+            CameraCaptureMetrics CaptureMetrics) CreateFrameFromSample(
+                SourceReaderSampleResult result,
+                CameraCapability capability,
+                double sampleQueueWaitMilliseconds)
+        {
+            IMFSample_unmanaged* sample =
+                (IMFSample_unmanaged*)result.SamplePointer;
+
+            double contiguousBufferMilliseconds = 0;
+
+            double bufferLockMilliseconds = 0;
+
+            double bufferAllocationMilliseconds = 0;
+
+            double bufferCopyMilliseconds = 0;
+
+            double frameTimestampIntervalMilliseconds = 0;
+
+            try
+            {
+                IMFMediaBuffer_unmanaged* buffer = null;
+
+                try
+                {
+                    long contiguousBufferStart =
+                        Stopwatch.GetTimestamp();
+
                     sample->ConvertToContiguousBuffer(
-                        out IMFMediaBuffer_unmanaged* buffer);
+                        out buffer);
+
+                    contiguousBufferMilliseconds =
+                        GetElapsedMilliseconds(
+                            contiguousBufferStart);
+
+                    if (buffer == null)
+                    {
+                        throw new InvalidOperationException(
+                            "Media Foundation returned a null media buffer.");
+                    }
+
+
+                    long bufferLockStart =
+                        Stopwatch.GetTimestamp();
+
+                    buffer->Lock(
+                        out byte* data,
+                        out uint maxLength,
+                        out uint currentLength);
+
+                    bufferLockMilliseconds =
+                        GetElapsedMilliseconds(
+                            bufferLockStart);
 
                     try
                     {
-                        buffer->Lock(
-                            out byte* data,
-                            out uint maxLength,
-                            out uint currentLength);
-
-                        try
+                        if (currentLength > int.MaxValue ||
+                            currentLength > maxLength)
                         {
-                            if (currentLength >
-                                int.MaxValue)
-                            {
-                                throw new InvalidOperationException(
-                                    "Media Foundation returned a sample " +
-                                    "larger than the maximum supported " +
-                                    "NorthStar buffer size.");
-                            }
+                            throw new InvalidOperationException(
+                                "Media Foundation returned an invalid sample buffer length.");
+                        }
 
-                            byte[] dataCopy =
-                                new byte[
-                                    (int)currentLength];
+                        long allocationStart =
+                            Stopwatch.GetTimestamp();
 
-                            Marshal.Copy(
-                                (nint)data,
-                                dataCopy,
-                                0,
-                                (int)currentLength);
+                        byte[] dataCopy =
+                            new byte[(int)currentLength];
 
-                            return new NorthStarFrame(
-                                currentCapability.Width,
-                                currentCapability.Height,
+                        bufferAllocationMilliseconds =
+                            GetElapsedMilliseconds(
+                                allocationStart);
+
+
+                        long copyStart =
+                            Stopwatch.GetTimestamp();
+
+                        Marshal.Copy(
+                            (nint)data,
+                            dataCopy,
+                            0,
+                            (int)currentLength);
+
+                        bufferCopyMilliseconds =
+                            GetElapsedMilliseconds(copyStart);
+
+
+                        NorthStarFrame frame =
+                            new NorthStarFrame(
+                                capability.Width,
+                                capability.Height,
                                 currentStride,
-                                timestamp,
-                                currentCapability.Subtype,
+                                result.Timestamp,
+                                capability.Subtype,
                                 null,
                                 dataCopy);
-                        }
-                        finally
+
+
+                        // Measures the timestamp interval between
+                        // frames delivered to the consumer.
+                        // Frames discarded from the queue are not included.
+                        if (previousFrameTimestamp.HasValue &&
+                            result.Timestamp >= previousFrameTimestamp.Value)
                         {
-                            buffer->Unlock();
+                            long timestampDifference =
+                                result.Timestamp -
+                                previousFrameTimestamp.Value;
+
+                            frameTimestampIntervalMilliseconds =
+                                timestampDifference / 10_000.0;
                         }
+
+                        previousFrameTimestamp =
+                            result.Timestamp;
+
+
+                        CameraCaptureMetrics metrics =
+                            new CameraCaptureMetrics(
+                                sampleQueueWaitMilliseconds,
+                                contiguousBufferMilliseconds,
+                                bufferLockMilliseconds,
+                                bufferAllocationMilliseconds,
+                                bufferCopyMilliseconds,
+                                frameTimestampIntervalMilliseconds);
+
+                        return (frame, metrics);
                     }
                     finally
                     {
-                        buffer->Release();
+                        buffer->Unlock();
                     }
                 }
                 finally
                 {
-                    sample->Release();
+                    if (buffer != null)
+                    {
+                        buffer->Release();
+                    }
                 }
             }
+            finally
+            {
+                // Release the retained sample reference acquired
+                // in SourceReaderCallback.OnReadSample().
+                sample->Release();
+            }
         }
 
-        public NorthStarFrame GetFrame()
-        {
-            ThrowIfDisposed();
 
-            return ReadSample();
-        }
+        // ============================================================
+        // COM reference management
+        // ============================================================
 
-        public void Close()
+        private static unsafe void ReleaseSample(nint sample)
         {
-            Dispose();
-        }
-
-        public void Dispose()
-        {
-            if (disposed)
+            if (sample == 0)
             {
                 return;
             }
 
-            disposed =
-                true;
-
-            currentStride =
-                0;
-
-            currentCapability =
-                null;
-
-            currentMediaType?.Dispose();
-            currentMediaType =
-                null;
-
-            sourceReader?.Dispose();
-            sourceReader =
-                null;
-
-            ReleaseComPointer(
-                mediaSource);
-
-            mediaSource =
-                null;
-
-            if (activate != null)
-            {
-                activate->Release();
-
-                activate =
-                    null;
-            }
-
-            GC.SuppressFinalize(
-                this);
-        }
-
-        private static void ReleaseComPointer(
-            void* pointer)
-        {
-            if (pointer == null)
-            {
-                return;
-            }
+            void* pointer =
+                (void*)sample;
 
             void** vtable =
                 *(void***)pointer;
 
-            ((delegate* unmanaged[Stdcall]<
-                void*,
-                uint>)
-            vtable[2])(
-                pointer);
+            ((delegate* unmanaged[Stdcall]<void*, uint>)
+                vtable[2])(pointer);
         }
+
+
+        private static unsafe void ReleaseComPointer(nint pointer)
+        {
+            if (pointer == 0)
+            {
+                return;
+            }
+
+            void* nativePointer =
+                (void*)pointer;
+
+            void** vtable =
+                *(void***)nativePointer;
+
+            ((delegate* unmanaged[Stdcall]<void*, uint>)
+                vtable[2])(nativePointer);
+        }
+
+
+        // ============================================================
+        // Disposal
+        // ============================================================
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0)
+            {
+                return;
+            }
+
+            Exception? flushFailure = null;
+
+            try
+            {
+                // Stop the continuous source and wait for OnFlush.
+                RequestFlushAsync()
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception exception)
+            {
+                flushFailure = exception;
+            }
+
+
+            // Wait until any active consumer has finished using
+            // its sample and native resources.
+            frameReadGate.Wait();
+
+            try
+            {
+                currentStride = 0;
+
+                currentCapability = null;
+
+                previousFrameTimestamp = null;
+
+                currentMediaType?.Dispose();
+                currentMediaType = null;
+
+
+                // Release the Source Reader before its callback.
+                sourceReader?.Dispose();
+                sourceReader = null;
+
+                sourceReaderCallback?.Dispose();
+                sourceReaderCallback = null;
+
+
+                ReleaseComPointer(mediaSourcePointer);
+                mediaSourcePointer = 0;
+
+
+                ReleaseComPointer(activatePointer);
+                activatePointer = 0;
+            }
+            finally
+            {
+                frameReadGate.Release();
+            }
+
+            GC.SuppressFinalize(this);
+
+            if (flushFailure != null)
+            {
+                throw new InvalidOperationException(
+                    "The camera Source Reader could not be flushed during disposal.",
+                    flushFailure);
+            }
+        }
+
+
+        // ============================================================
+        // Timing
+        // ============================================================
+
+        private static double GetElapsedMilliseconds(
+            long startTimestamp)
+        {
+            long elapsedTimestamp =
+                Stopwatch.GetTimestamp() -
+                startTimestamp;
+
+            return
+                elapsedTimestamp *
+                1000.0 /
+                Stopwatch.Frequency;
+        }
+
+
+        // ============================================================
+        // Validation
+        // ============================================================
 
         private void ThrowIfDisposed()
         {
             ObjectDisposedException.ThrowIf(
-                disposed,
+                Volatile.Read(ref disposed) != 0,
                 this);
         }
     }

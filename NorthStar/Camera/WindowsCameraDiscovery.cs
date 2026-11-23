@@ -1,7 +1,10 @@
-﻿using NorthStar.Camera.Interop;
+﻿
+using NorthStar.Camera.Interop;
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
+
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Media.MediaFoundation;
@@ -10,10 +13,14 @@ namespace NorthStar.Camera
 {
     // Discovers cameras exposed through Windows Media Foundation.
     //
-    // Discovery produces descriptions of cameras. It does not create
-    // long-lived CameraDevice instances.
+    // Discovery produces immutable camera descriptions.
+    // It does not create or retain long-lived CameraDevice instances.
     public sealed class WindowsCameraDiscovery
     {
+        // ============================================================
+        // Media Foundation constants
+        // ============================================================
+
         private const uint FirstVideoStream =
             unchecked(
                 (uint)
@@ -21,80 +28,95 @@ namespace NorthStar.Camera
                     .MF_SOURCE_READER_FIRST_VIDEO_STREAM);
 
         private static readonly Guid MediaSourceGuid =
-            new Guid(
-                "279A808D-AEC7-40C8-9C6B-A6B492C78A66");
+            new("279A808D-AEC7-40C8-9C6B-A6B492C78A66");
 
         private const int MfENoMoreTypes =
             unchecked((int)0xC00D36B9);
 
+
+        // ============================================================
+        // Camera discovery
+        // ============================================================
+
         public unsafe IReadOnlyList<CameraDescriptor> Discover()
         {
-            Console.WriteLine(
-                "Media Foundation camera discovery");
-
             PInvoke.MFCreateAttributes(
                 out var attributes,
                 1);
 
             try
             {
-                ConfigureDiscoveryAttributes(
-                    attributes);
+                ConfigureDiscoveryAttributes(attributes);
 
-                PInvoke.MFEnumDeviceSources(
-                    attributes,
-                    out var devices,
-                    out var deviceCount);
+                IMFActivate_unmanaged** devices = null;
+
+                uint deviceCount = 0;
 
                 try
                 {
-                    Console.WriteLine(
-                        $"Found {deviceCount} cameras");
+                    PInvoke.MFEnumDeviceSources(
+                        attributes,
+                        out devices,
+                        out deviceCount);
 
                     List<CameraDescriptor> descriptors =
-                        new List<CameraDescriptor>(
-                            checked((int)deviceCount));
+                        new(checked((int)deviceCount));
 
-                    for (uint i = 0;
-                         i < deviceCount;
-                         i++)
+                    if (devices == null || deviceCount == 0)
                     {
-                        Console.WriteLine(
-                            $"Processing camera {i}");
+                        return descriptors.AsReadOnly();
+                    }
 
+                    for (uint i = 0; i < deviceCount; i++)
+                    {
                         IMFActivate_unmanaged* device =
                             devices[i];
 
-                        try
+                        if (device == null)
                         {
-                            descriptors.Add(
-                                DiscoverCamera(
-                                    device,
-                                    i));
+                            continue;
                         }
-                        finally
+
+                        descriptors.Add(
+                            DiscoverCamera(device));
+                    }
+
+                    return descriptors.AsReadOnly();
+                }
+                finally
+                {
+                    // Every activation reference returned by
+                    // MFEnumDeviceSources must be released.
+                    //
+                    // Cleanup happens even if discovery of an
+                    // individual camera throws an exception.
+                    if (devices != null)
+                    {
+                        for (uint i = 0; i < deviceCount; i++)
                         {
+                            IMFActivate_unmanaged* device =
+                                devices[i];
+
                             if (device != null)
                             {
                                 device->Release();
                             }
                         }
-                    }
 
-                    return descriptors;
-                }
-                finally
-                {
-                    PInvoke.CoTaskMemFree(
-                        devices);
+                        PInvoke.CoTaskMemFree(devices);
+                    }
                 }
             }
             finally
             {
-                Marshal.ReleaseComObject(
-                    attributes);
+                Marshal.ReleaseComObject(attributes);
             }
         }
+
+
+        // ============================================================
+        // Device enumeration configuration
+        // ============================================================
 
         private static unsafe void ConfigureDiscoveryAttributes(
             IMFAttributes attributes)
@@ -110,9 +132,13 @@ namespace NorthStar.Camera
                 &videoCaptureType);
         }
 
+
+        // ============================================================
+        // Camera descriptor creation
+        // ============================================================
+
         private static unsafe CameraDescriptor DiscoverCamera(
-            IMFActivate_unmanaged* device,
-            uint index)
+            IMFActivate_unmanaged* device)
         {
             string name =
                 GetDeviceString(
@@ -125,21 +151,7 @@ namespace NorthStar.Camera
                     PInvoke.MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK);
 
             IReadOnlyList<CameraCapability> capabilities =
-                DiscoverCapabilities(
-                    device);
-
-            Console.WriteLine(
-                $"Camera {index}: {name}");
-
-            foreach (
-                CameraCapability capability
-                in capabilities)
-            {
-                Console.WriteLine(
-                    $"Media type " +
-                    $"{capability.MediaTypeIndex}: " +
-                    $"{capability}");
-            }
+                DiscoverCapabilities(device);
 
             return new CameraDescriptor(
                 name,
@@ -147,11 +159,21 @@ namespace NorthStar.Camera
                 capabilities);
         }
 
+
+        // ============================================================
+        // Device information
+        // ============================================================
+
         private static unsafe string GetDeviceString(
             IMFActivate_unmanaged* device,
             Guid attributeKey)
         {
-            PWSTR value;
+            if (device == null)
+            {
+                throw new ArgumentNullException(nameof(device));
+            }
+
+            PWSTR value = default;
 
             device->GetAllocatedString(
                 &attributeKey,
@@ -160,17 +182,31 @@ namespace NorthStar.Camera
 
             try
             {
+                if (value.Value == null)
+                {
+                    throw new InvalidOperationException(
+                        "Media Foundation returned an empty camera attribute.");
+                }
+
                 return value.ToString();
             }
             finally
             {
-                PInvoke.CoTaskMemFree(
-                    value.Value);
+                if (value.Value != null)
+                {
+                    PInvoke.CoTaskMemFree(value.Value);
+                }
             }
         }
 
-        private static unsafe IReadOnlyList<CameraCapability> DiscoverCapabilities(
-            IMFActivate_unmanaged* device)
+
+        // ============================================================
+        // Camera capability discovery
+        // ============================================================
+
+        private static unsafe IReadOnlyList<CameraCapability>
+            DiscoverCapabilities(
+                IMFActivate_unmanaged* device)
         {
             void* sourcePointer =
                 device->ActivateObject(
@@ -203,36 +239,47 @@ namespace NorthStar.Camera
                             "Media Foundation returned a null source reader.");
                     }
 
-                    using RawSourceReader sourceReader =
-                        new RawSourceReader(
-                            readerPointer);
+                    // RawSourceReader assumes ownership of the
+                    // native pointer, including on constructor failure.
+                    void* ownedReaderPointer =
+                        readerPointer;
 
                     readerPointer = null;
 
-                    return EnumerateCapabilities(
-                        sourceReader);
+                    using RawSourceReader sourceReader =
+                        new RawSourceReader(
+                            ownedReaderPointer);
+
+                    return EnumerateCapabilities(sourceReader);
                 }
                 finally
                 {
+                    // Releases the pointer only if ownership
+                    // was not successfully transferred.
                     if (readerPointer != null)
                     {
-                        ReleaseComPointer(
-                            readerPointer);
+                        ReleaseComPointer(readerPointer);
                     }
                 }
             }
             finally
             {
-                ReleaseComPointer(
-                    sourcePointer);
+                // Each discovery operation creates a temporary
+                // media source. It must not survive discovery.
+                ReleaseComPointer(sourcePointer);
             }
         }
 
-        private static unsafe IReadOnlyList<CameraCapability> EnumerateCapabilities(
-            RawSourceReader sourceReader)
+
+        // ============================================================
+        // Native media type enumeration
+        // ============================================================
+
+        private static unsafe IReadOnlyList<CameraCapability>
+            EnumerateCapabilities(
+                RawSourceReader sourceReader)
         {
-            List<CameraCapability> capabilities =
-                new List<CameraCapability>();
+            List<CameraCapability> capabilities = new();
 
             uint mediaTypeIndex = 0;
 
@@ -268,16 +315,20 @@ namespace NorthStar.Camera
                         mediaTypeIndex,
                         mediaType);
 
-                capabilities.Add(
-                    capability);
+                capabilities.Add(capability);
 
                 mediaTypeIndex++;
             }
 
-            return capabilities;
+            return capabilities.AsReadOnly();
         }
 
-        private static unsafe CameraCapability ReadCapability(
+
+        // ============================================================
+        // Capability extraction
+        // ============================================================
+
+        private static CameraCapability ReadCapability(
             uint mediaTypeIndex,
             RawMediaType mediaType)
         {
@@ -289,12 +340,10 @@ namespace NorthStar.Camera
             hr.ThrowOnFailure();
 
             int width =
-                checked(
-                    (int)(frameSize >> 32));
+                checked((int)(frameSize >> 32));
 
             int height =
-                checked(
-                    (int)(frameSize & 0xFFFFFFFF));
+                checked((int)(frameSize & 0xFFFFFFFF));
 
             hr =
                 mediaType.GetUINT64(
@@ -309,11 +358,10 @@ namespace NorthStar.Camera
             uint denominator =
                 (uint)(frameRate & 0xFFFFFFFF);
 
-            if (denominator == 0)
+            if (numerator == 0 || denominator == 0)
             {
                 throw new InvalidOperationException(
-                    "Media Foundation reported a zero " +
-                    "frame-rate denominator.");
+                    "Media Foundation reported an invalid frame rate.");
             }
 
             hr =
@@ -331,6 +379,11 @@ namespace NorthStar.Camera
                 denominator,
                 subtype);
         }
+
+
+        // ============================================================
+        // COM reference management
+        // ============================================================
 
         private static unsafe void ReleaseComPointer(
             void* pointer)

@@ -1,7 +1,10 @@
 <Solution>
-  <Project Path="NorthStar.UI/NorthStar.UI.csproj" Id="d1a00e1a-44ce-40a8-adc2-7ee349125cfe">
+  <Project Path="../../../../../../../../Dev/Projects/NorthStar/NorthStar.Tests/NorthStar.Tests.csproj" Id="b006f44a-1bf7-4cd2-8216-99c995cefd4b">
+    <Platform Project="x64" />
+  </Project>
+  <Project Path="../../../../../../../../Dev/Projects/NorthStar/NorthStar.UI/NorthStar.UI.csproj" Id="d1a00e1a-44ce-40a8-adc2-7ee349125cfe">
     <Platform Project="x64" />
     <Deploy />
   </Project>
-  <Project Path="NorthStar/NorthStar.csproj" />
+  <Project Path="../../../../../../../../Dev/Projects/NorthStar/NorthStar/NorthStar.csproj" />
 </Solution>

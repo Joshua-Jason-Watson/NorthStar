@@ -6,58 +6,218 @@
     <Application.Resources>
         <ResourceDictionary>
 
-            <!-- NorthStar colors -->
+            <ResourceDictionary.MergedDictionaries>
 
-            <SolidColorBrush
-                x:Key="NorthStarGreen"
-                Color="#00FF00" />
+                <!-- WINUI THEME RESOURCES -->
 
-            <SolidColorBrush
-                x:Key="NorthStarDarkGreen"
-                Color="#0B140B" />
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
 
-            <SolidColorBrush
-                x:Key="NorthStarAccent"
-                Color="#FF00FF" />
+                        <ResourceDictionary x:Key="Default">
+
+                            <!-- COMBOBOX BACKGROUND -->
+
+                            <SolidColorBrush x:Key="ComboBoxBackground" Color="#1B2A1B"/>
+                            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#223322"/>
+                            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#263B26"/>
+                            <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#142014"/>
+                            <SolidColorBrush x:Key="ComboBoxBackgroundUnfocused" Color="#1B2A1B"/>
+                            <SolidColorBrush x:Key="ComboBoxBackgroundFocused" Color="#1B2A1B"/>
+
+                            <!-- COMBOBOX BORDER -->
+
+                            <SolidColorBrush x:Key="ComboBoxBackgroundBorderBrushFocused" Color="#00FF00"/>
+                            <SolidColorBrush x:Key="ComboBoxBackgroundBorderBrushUnfocused" Color="#294029"/>
+
+                            <!-- COMBOBOX FOREGROUND -->
+
+                            <SolidColorBrush x:Key="ComboBoxForeground" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxForegroundPointerOver" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxForegroundPressed" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#789078"/>
+                            <SolidColorBrush x:Key="ComboBoxForegroundFocused" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxForegroundFocusedPressed" Color="#DCEBDD"/>
+
+                            <!-- PLACEHOLDER -->
+
+                            <SolidColorBrush x:Key="ComboBoxPlaceHolderForeground" Color="#8AAB8A"/>
+                            <SolidColorBrush x:Key="ComboBoxPlaceHolderForegroundPointerOver" Color="#8AAB8A"/>
+                            <SolidColorBrush x:Key="ComboBoxPlaceHolderForegroundPressed" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxPlaceHolderForegroundDisabled" Color="#789078"/>
+
+                            <!-- DROPDOWN GLYPH -->
+
+                            <SolidColorBrush x:Key="ComboBoxEditableDropDownGlyphForeground" Color="#00FF00"/>
+
+                            <!-- DROPDOWN ITEM BACKGROUNDS -->
+
+                            <SolidColorBrush x:Key="ComboBoxItemBackground" Color="#142014"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#1B2A1B"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#263B26"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundDisabled" Color="#142014"/>
+
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#263B26"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedUnfocused" Color="#1B2A1B"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#314A31"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#314A31"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedDisabled" Color="#142014"/>
+
+                            <!-- DROPDOWN ITEM FOREGROUNDS -->
+
+                            <SolidColorBrush x:Key="ComboBoxItemForeground" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="#00FF00"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundPressed" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundDisabled" Color="#789078"/>
+
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#FF00FF"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedUnfocused" Color="#FF00FF"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPressed" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#DCEBDD"/>
+                            <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedDisabled" Color="#789078"/>
+
+                            <!-- DROPDOWN ITEM BORDERS -->
+
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushPointerOver" Color="#294029"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushPressed" Color="#00AA00"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushDisabled" Color="Transparent"/>
+
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushSelected" Color="#294029"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushSelectedUnfocused" Color="#294029"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushSelectedPressed" Color="#00AA00"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushSelectedPointerOver" Color="#294029"/>
+                            <SolidColorBrush x:Key="ComboBoxItemBorderBrushSelectedDisabled" Color="Transparent"/>
+
+                            <!-- SELECTION INDICATOR -->
+
+                            <SolidColorBrush x:Key="ComboBoxItemPillFillBrush" Color="#FF00FF"/>
+
+                            <!-- DROPDOWN BACKGROUND STATES -->
+
+                            <SolidColorBrush x:Key="ComboBoxDropDownBackgroundPointerOver" Color="#1B2A1B"/>
+                            <SolidColorBrush x:Key="ComboBoxDropDownBackgroundPointerPressed" Color="#263B26"/>
+                            <SolidColorBrush x:Key="ComboBoxFocusedDropDownBackgroundPointerOver" Color="#223322"/>
+                            <SolidColorBrush x:Key="ComboBoxFocusedDropDownBackgroundPointerPressed" Color="#263B26"/>
+
+                        </ResourceDictionary>
+
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
 
 
-            <!-- ComboBox styling -->
+                <!-- NORTHSTAR APPLICATION RESOURCES -->
 
-            <SolidColorBrush
-                x:Key="ComboBoxPlaceHolderForeground"
-                Color="#00FF00" />
+                <ResourceDictionary>
 
-            <SolidColorBrush
-                x:Key="ComboBoxPlaceHolderForegroundPointerOver"
-                Color="#00FF00" />
+                    <!-- CORE COLORS -->
 
-            <SolidColorBrush
-                x:Key="ComboBoxPlaceHolderForegroundPressed"
-                Color="#00FF00" />
+                    <SolidColorBrush x:Key="NorthStarGreen" Color="#00FF00"/>
+                    <SolidColorBrush x:Key="NorthStarDarkGreen" Color="#0B140B"/>
+                    <SolidColorBrush x:Key="NorthStarAccent" Color="#FF00FF"/>
 
-            <SolidColorBrush
-                x:Key="ComboBoxPlaceHolderForegroundFocused"
-                Color="#00FF00" />
+                    <!-- SURFACES -->
 
-            <SolidColorBrush
-                x:Key="ComboBoxItemForeground"
-                Color="#00FF00" />
+                    <SolidColorBrush x:Key="NorthStarSurface" Color="#142014"/>
+                    <SolidColorBrush x:Key="NorthStarSurfaceElevated" Color="#1B2A1B"/>
+                    <SolidColorBrush x:Key="NorthStarMagentaSurface" Color="#261026"/>
 
-            <SolidColorBrush
-                x:Key="ComboBoxItemForegroundPointerOver"
-                Color="#00FF00" />
+                    <!-- BORDERS -->
 
-            <SolidColorBrush
-                x:Key="ComboBoxItemForegroundSelected"
-                Color="#00FF00" />
+                    <SolidColorBrush x:Key="NorthStarBorder" Color="#294029"/>
+                    <SolidColorBrush x:Key="NorthStarBorderAccent" Color="#00FF00"/>
+                    <SolidColorBrush x:Key="NorthStarMagentaBorder" Color="#663366"/>
 
-            <SolidColorBrush
-                x:Key="ComboBoxItemForegroundSelectedPointerOver"
-                Color="#00FF00" />
+                    <!-- TEXT -->
 
-            <SolidColorBrush
-                x:Key="ComboBoxItemForegroundPressed"
-                Color="#00FF00" />
+                    <SolidColorBrush x:Key="NorthStarText" Color="#DCEBDD"/>
+                    <SolidColorBrush x:Key="NorthStarSecondaryText" Color="#8AAB8A"/>
+
+
+                    <!-- COMBOBOX STYLE -->
+
+                    <Style
+                        x:Key="NorthStarComboBoxStyle"
+                        TargetType="ComboBox">
+
+                        <Setter Property="Background"
+                                Value="{StaticResource NorthStarSurfaceElevated}"/>
+
+                        <Setter Property="Foreground"
+                                Value="{StaticResource NorthStarText}"/>
+
+                        <Setter Property="PlaceholderForeground"
+                                Value="{StaticResource NorthStarSecondaryText}"/>
+
+                        <Setter Property="BorderBrush"
+                                Value="{StaticResource NorthStarBorder}"/>
+
+                        <Setter Property="BorderThickness"
+                                Value="1"/>
+
+                        <Setter Property="Padding"
+                                Value="12,8"/>
+
+                        <Setter Property="MinHeight"
+                                Value="42"/>
+
+                        <Setter Property="FontSize"
+                                Value="14"/>
+
+                    </Style>
+
+
+                    <!-- PRIMARY BUTTON -->
+
+                    <Style
+                        x:Key="NorthStarPrimaryButton"
+                        TargetType="Button">
+
+                        <Setter Property="Background" Value="#00FF00"/>
+                        <Setter Property="Foreground" Value="#0B140B"/>
+                        <Setter Property="BorderBrush" Value="#00FF00"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Padding" Value="14,10"/>
+                        <Setter Property="MinHeight" Value="44"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+
+                    </Style>
+
+
+                    <!-- SECONDARY BUTTON -->
+
+                    <Style
+                        x:Key="NorthStarSecondaryButton"
+                        TargetType="Button">
+
+                        <Setter Property="Background" Value="#FF00FF"/>
+                        <Setter Property="Foreground" Value="#0B140B"/>
+                        <Setter Property="BorderBrush" Value="#FF00FF"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Padding" Value="14,10"/>
+                        <Setter Property="MinHeight" Value="44"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+
+                    </Style>
+
+
+                    <!-- SUBTLE BUTTON -->
+
+                    <Style
+                        x:Key="NorthStarSubtleButton"
+                        TargetType="Button">
+
+                        <Setter Property="Background" Value="#142014"/>
+                        <Setter Property="Foreground" Value="#8AAB8A"/>
+                        <Setter Property="BorderBrush" Value="#294029"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="Padding" Value="12,8"/>
+                        <Setter Property="MinHeight" Value="38"/>
+
+                    </Style>
+
+                </ResourceDictionary>
+
+            </ResourceDictionary.MergedDictionaries>
 
         </ResourceDictionary>
     </Application.Resources>

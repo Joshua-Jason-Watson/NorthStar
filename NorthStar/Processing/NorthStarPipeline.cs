@@ -1,4 +1,5 @@
-﻿using NorthStar.Camera;
+﻿
+using NorthStar.Camera;
 using NorthStar.Conversion;
 using NorthStar.Decoding;
 using NorthStar.Formats;
@@ -6,14 +7,19 @@ using NorthStar.Frames;
 
 using System;
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NorthStar.Processing
 {
     // Coordinates camera capture, frame decoding, and image
     // conversion for individual camera frames.
     //
-    // This class processes one frame at a time. It does not own
-    // tracking, background processing, or application lifecycle.
+    // Camera acquisition is asynchronous. Frame decoding and
+    // image conversion are performed synchronously after capture.
+    //
+    // This class does not own tracking, background processing,
+    // or application lifecycle.
     public sealed class NorthStarPipeline
     {
         // ============================================================
@@ -21,7 +27,9 @@ namespace NorthStar.Processing
         // ============================================================
 
         private readonly ICamera camera;
+
         private readonly FrameDecoderRegistry decoderRegistry;
+
         private readonly ImageConverterRegistry converterRegistry;
 
 
@@ -35,13 +43,15 @@ namespace NorthStar.Processing
             ImageConverterRegistry converterRegistry)
         {
             this.camera =
-                camera;
+                camera ?? throw new ArgumentNullException(nameof(camera));
 
             this.decoderRegistry =
-                decoderRegistry;
+                decoderRegistry
+                ?? throw new ArgumentNullException(nameof(decoderRegistry));
 
             this.converterRegistry =
-                converterRegistry;
+                converterRegistry
+                ?? throw new ArgumentNullException(nameof(converterRegistry));
         }
 
 
@@ -49,10 +59,15 @@ namespace NorthStar.Processing
         // Capture
         // ============================================================
 
-        // Captures the next frame from the camera.
-        public NorthStarFrame CaptureFrame()
+        // Asynchronously captures the next frame and returns
+        // its camera acquisition measurements.
+        public Task<(
+            NorthStarFrame Frame,
+            CameraCaptureMetrics CaptureMetrics)> CaptureFrameAsync(
+                CancellationToken cancellationToken = default)
         {
-            return camera.GetFrame();
+            return camera.GetFrameAsync(
+                cancellationToken);
         }
 
 
@@ -64,39 +79,26 @@ namespace NorthStar.Processing
         public IFrameDecoder GetDecoder(
             NorthStarFrame frame)
         {
+            ArgumentNullException.ThrowIfNull(frame);
+
             return decoderRegistry.GetDecoder(
                 frame.Subtype);
         }
 
-        // Captures and decodes the next camera frame.
-        public NorthStarImage DecodeNextFrame()
+        // Asynchronously captures and decodes the next camera frame.
+        public async Task<NorthStarImage> DecodeNextFrameAsync(
+            CancellationToken cancellationToken = default)
         {
-            return DecodeNextFrame(
-                out _);
-        }
-
-        // Captures and decodes the next camera frame while
-        // reporting the time spent on the decode stage.
-        public NorthStarImage DecodeNextFrame(
-            out double decodeMilliseconds)
-        {
-            long startTimestamp =
-                Stopwatch.GetTimestamp();
-
-            NorthStarFrame frame =
-                CaptureFrame();
+            (NorthStarFrame Frame, CameraCaptureMetrics CaptureMetrics)
+                capturedFrame =
+                    await CaptureFrameAsync(cancellationToken)
+                        .ConfigureAwait(false);
 
             IFrameDecoder decoder =
-                GetDecoder(frame);
+                GetDecoder(capturedFrame.Frame);
 
-            NorthStarImage image =
-                decoder.Decode(frame);
-
-            decodeMilliseconds =
-                GetElapsedMilliseconds(
-                    startTimestamp);
-
-            return image;
+            return decoder.Decode(
+                capturedFrame.Frame);
         }
 
 
@@ -104,13 +106,15 @@ namespace NorthStar.Processing
         // Conversion
         // ============================================================
 
-        // Captures, decodes, and converts the next camera frame
-        // to the requested pixel format.
-        public NorthStarImage ConvertNextFrameTo(
-            NorthStarPixelFormat destinationFormat)
+        // Asynchronously captures, decodes, and converts the next
+        // camera frame to the requested pixel format.
+        public async Task<NorthStarImage> ConvertNextFrameToAsync(
+            NorthStarPixelFormat destinationFormat,
+            CancellationToken cancellationToken = default)
         {
             NorthStarImage image =
-                DecodeNextFrame();
+                await DecodeNextFrameAsync(cancellationToken)
+                    .ConfigureAwait(false);
 
             return ConvertImage(
                 image,
@@ -123,14 +127,9 @@ namespace NorthStar.Processing
             NorthStarImage image,
             NorthStarPixelFormat destinationFormat)
         {
-            if (image == null)
-            {
-                throw new ArgumentNullException(
-                    nameof(image));
-            }
+            ArgumentNullException.ThrowIfNull(image);
 
-            if (image.PixelFormat ==
-                destinationFormat)
+            if (image.PixelFormat == destinationFormat)
             {
                 return image;
             }
@@ -150,32 +149,51 @@ namespace NorthStar.Processing
         // Frame processing
         // ============================================================
 
-        // Captures and prepares the next camera frame as a
-        // BGR24 image for downstream consumers.
-        public NorthStarImage ProcessNextFrame()
+        // Asynchronously captures and prepares the next camera
+        // frame as a BGR24 image.
+        //
+        // Returns both the processed image and stage measurements.
+        public async Task<(
+            NorthStarImage Image,
+            NorthStarPipelineMetrics Metrics)> ProcessNextFrameAsync(
+                CancellationToken cancellationToken = default)
         {
-            return ProcessNextFrame(
-                out _);
-        }
-
-        // Captures and prepares the next camera frame as a
-        // BGR24 image while reporting timing information for
-        // each stage.
-        public NorthStarImage ProcessNextFrame(
-            out NorthStarPipelineMetrics metrics)
-        {
-            long totalStartTimestamp =
-                Stopwatch.GetTimestamp();
-
             long captureStartTimestamp =
                 Stopwatch.GetTimestamp();
 
-            NorthStarFrame frame =
-                CaptureFrame();
+            (
+                NorthStarFrame Frame,
+                CameraCaptureMetrics CaptureMetrics
+            ) capturedFrame =
+                await CaptureFrameAsync(cancellationToken)
+                    .ConfigureAwait(false);
 
             double captureMilliseconds =
                 GetElapsedMilliseconds(
                     captureStartTimestamp);
+
+            NorthStarImage image =
+                ProcessCapturedFrame(
+                    capturedFrame.Frame,
+                    capturedFrame.CaptureMetrics,
+                    captureMilliseconds,
+                    out NorthStarPipelineMetrics metrics);
+
+            return (image, metrics);
+        }
+
+
+        // Processes an already-captured frame.
+        //
+        // This allows camera acquisition and frame processing
+        // to operate independently.
+        public NorthStarImage ProcessCapturedFrame(
+            NorthStarFrame frame,
+            CameraCaptureMetrics cameraCaptureMetrics,
+            double captureMilliseconds,
+            out NorthStarPipelineMetrics metrics)
+        {
+            ArgumentNullException.ThrowIfNull(frame);
 
             long decodeStartTimestamp =
                 Stopwatch.GetTimestamp();
@@ -203,15 +221,17 @@ namespace NorthStar.Processing
                     conversionStartTimestamp);
 
             double totalMilliseconds =
-                GetElapsedMilliseconds(
-                    totalStartTimestamp);
+                captureMilliseconds +
+                decodeMilliseconds +
+                conversionMilliseconds;
 
             metrics =
                 new NorthStarPipelineMetrics(
                     captureMilliseconds,
                     decodeMilliseconds,
                     conversionMilliseconds,
-                    totalMilliseconds);
+                    totalMilliseconds,
+                    cameraCaptureMetrics);
 
             return convertedImage;
         }

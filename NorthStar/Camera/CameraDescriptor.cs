@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.Collections.Generic;
 
 namespace NorthStar.Camera
@@ -8,7 +9,7 @@ namespace NorthStar.Camera
     // A descriptor contains information about a camera but does not
     // open or own any Media Foundation resources.
     //
-    // Once constructed, the descriptor is immutable.
+    // Its camera capabilities are captured as an immutable snapshot.
     public sealed class CameraDescriptor
     {
         // Human-readable camera name.
@@ -17,7 +18,7 @@ namespace NorthStar.Camera
         // Stable identifier used to locate the camera again.
         public string Identifier { get; }
 
-        // Native media types supported by this camera.
+        // Read-only snapshot of the camera's supported media types.
         public IReadOnlyList<CameraCapability> Capabilities { get; }
 
         public CameraDescriptor(
@@ -39,21 +40,34 @@ namespace NorthStar.Camera
                     nameof(identifier));
             }
 
-            if (capabilities == null)
+            ArgumentNullException.ThrowIfNull(capabilities);
+
+            // Copy the supplied capabilities so changes to the
+            // original collection cannot affect this descriptor.
+            CameraCapability[] snapshot =
+                new CameraCapability[capabilities.Count];
+
+            for (int i = 0; i < capabilities.Count; i++)
             {
-                throw new ArgumentNullException(
-                    nameof(capabilities));
+                CameraCapability capability =
+                    capabilities[i];
+
+                if (capability == null)
+                {
+                    throw new ArgumentException(
+                        "Camera capabilities cannot contain null entries.",
+                        nameof(capabilities));
+                }
+
+                snapshot[i] = capability;
             }
 
-            Name =
-                name;
+            Name = name;
 
-            Identifier =
-                identifier;
+            Identifier = identifier;
 
             Capabilities =
-                new List<CameraCapability>(
-                    capabilities);
+                Array.AsReadOnly(snapshot);
         }
     }
 }

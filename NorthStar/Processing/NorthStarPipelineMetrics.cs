@@ -1,4 +1,7 @@
-﻿namespace NorthStar.Processing
+﻿
+using NorthStar.Camera;
+
+namespace NorthStar.Processing
 {
     // Contains timing information for one pipeline frame.
     //
@@ -13,11 +16,15 @@
 
         public double TotalMilliseconds { get; }
 
+        // Detailed measurements from the camera acquisition stage.
+        public CameraCaptureMetrics CameraCapture { get; }
+
         public NorthStarPipelineMetrics(
             double captureMilliseconds,
             double decodeMilliseconds,
             double conversionMilliseconds,
-            double totalMilliseconds)
+            double totalMilliseconds,
+            CameraCaptureMetrics cameraCapture)
         {
             CaptureMilliseconds =
                 captureMilliseconds;
@@ -30,6 +37,9 @@
 
             TotalMilliseconds =
                 totalMilliseconds;
+
+            CameraCapture =
+                cameraCapture;
         }
     }
 }

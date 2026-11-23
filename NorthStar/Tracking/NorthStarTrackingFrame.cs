@@ -1,10 +1,16 @@
-﻿using NorthStar.Frames;
+﻿
+using System;
+
+using NorthStar.Frames;
 
 namespace NorthStar.Tracking
 {
-    // Represents the complete result of processing one camera frame.
-    // It keeps the image and the corresponding tracking result together
-    // so visualization and future consumers can process the same frame.
+    // Represents the complete processing result associated
+    // with one camera frame.
+    //
+    // The image and pose results must correspond to the same
+    // source frame so consumers can visualize and interpret
+    // the results without losing frame synchronization.
     public sealed class NorthStarTrackingFrame
     {
         public NorthStarImage Image { get; }
@@ -15,8 +21,11 @@ namespace NorthStar.Tracking
             NorthStarImage image,
             PoseResult pose)
         {
-            Image = image;
-            Pose = pose;
+            Image =
+                image ?? throw new ArgumentNullException(nameof(image));
+
+            Pose =
+                pose ?? throw new ArgumentNullException(nameof(pose));
         }
     }
 }

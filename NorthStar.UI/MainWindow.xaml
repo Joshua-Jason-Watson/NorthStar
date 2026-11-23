@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <Window
     x:Class="NorthStar.UI.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -7,211 +8,349 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    Title="NorthStar.UI">
+    Title="NorthStar">
 
     <Window.SystemBackdrop>
-        <MicaBackdrop />
+        <MicaBackdrop/>
     </Window.SystemBackdrop>
 
-    <Grid Background="{StaticResource NorthStarDarkGreen}">
+    <Grid
+        Background="{StaticResource NorthStarDarkGreen}"
+        RequestedTheme="Dark">
 
-        <!-- Main window layout -->
         <Grid.RowDefinitions>
-            <RowDefinition Height="70" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="76"/>
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        <!-- HEADER -->
 
-
-        <!-- Header -->
-        <Grid
+        <Border
             Grid.Row="0"
-            Grid.Column="0"
-            Grid.ColumnSpan="2">
+            Background="{StaticResource NorthStarSurface}"
+            BorderBrush="{StaticResource NorthStarBorder}"
+            BorderThickness="0,0,0,1">
 
-            <TextBlock
-                Text="NorthStar"
-                FontSize="32"
-                Foreground="{StaticResource NorthStarGreen}"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Center"
-                Margin="20,0,0,0" />
+            <Grid Margin="24,0">
 
-            <Button
-                x:Name="DevButton"
-                Content="Dev"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Center"
-                Margin="0,0,20,0"
-                Click="DevButton_Click" />
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-        </Grid>
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="12"
+                    VerticalAlignment="Center">
 
+                    <Border
+                        Width="8"
+                        Height="34"
+                        Background="{StaticResource NorthStarGreen}"
+                        CornerRadius="3"/>
 
-        <!-- Main view -->
-        <Grid
-            x:Name="MainView"
-            Grid.Row="1"
-            Grid.Column="0"
-            Grid.ColumnSpan="2">
+                    <StackPanel Spacing="0">
 
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+                        <TextBlock
+                            Text="NORTHSTAR"
+                            FontSize="24"
+                            FontWeight="SemiBold"
+                            CharacterSpacing="100"
+                            Foreground="{StaticResource NorthStarGreen}"/>
 
+                        <TextBlock
+                            Text="REAL-TIME TRACKING PLATFORM"
+                            FontSize="10"
+                            CharacterSpacing="120"
+                            Foreground="{StaticResource NorthStarSecondaryText}"/>
 
-            <!-- Control panel -->
-            <Grid
-                Grid.Column="0"
-                Margin="20">
+                    </StackPanel>
 
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <!-- Panel title -->
-                <TextBlock
-                    Text="Controls"
-                    FontSize="20"
-                    Foreground="{StaticResource NorthStarGreen}"
-                    Grid.Row="0"
-                    HorizontalAlignment="Center" />
-
-
-                <!-- Camera label -->
-                <TextBlock
-                    Text="Camera"
-                    Foreground="{StaticResource NorthStarGreen}"
-                    Grid.Row="1"
-                    Margin="0,10,0,5" />
-
-
-                <!-- Camera selector -->
-                <ComboBox
-                    x:Name="CameraSelector"
-                    PlaceholderText="Select camera"
-                    DisplayMemberPath="Name"
-                    Foreground="{StaticResource NorthStarAccent}"
-                    Grid.Row="2"
-                    HorizontalAlignment="Stretch"
-                    SelectionChanged="CameraSelector_SelectionChanged" />
-
-
-                <!-- Resolution label -->
-                <TextBlock
-                    Text="Resolution"
-                    Foreground="{StaticResource NorthStarGreen}"
-                    Grid.Row="3"
-                    Margin="0,20,0,5" />
-
-
-                <!-- Resolution selector -->
-                <ComboBox
-                    x:Name="ResolutionSelector"
-                    PlaceholderText="Select resolution"
-                    Foreground="{StaticResource NorthStarAccent}"
-                    Grid.Row="4"
-                    HorizontalAlignment="Stretch"
-                    SelectionChanged="ResolutionSelector_SelectionChanged" />
-
-
-                <!-- Frame rate label -->
-                <TextBlock
-                    Text="Frame Rate"
-                    Foreground="{StaticResource NorthStarGreen}"
-                    Grid.Row="5"
-                    Margin="0,20,0,5" />
-
-
-                <!-- Frame rate selector -->
-                <ComboBox
-                    x:Name="FrameRateSelector"
-                    PlaceholderText="Select frame rate"
-                    Foreground="{StaticResource NorthStarAccent}"
-                    Grid.Row="6"
-                    HorizontalAlignment="Stretch"
-                    SelectionChanged="FrameRateSelector_SelectionChanged" />
-
-
-                <!-- Format label -->
-                <TextBlock
-                    Text="Format"
-                    Foreground="{StaticResource NorthStarGreen}"
-                    Grid.Row="7"
-                    Margin="0,20,0,5" />
-
-
-                <!-- Format selector -->
-                <ComboBox
-                    x:Name="FormatSelector"
-                    PlaceholderText="Select format"
-                    Foreground="{StaticResource NorthStarAccent}"
-                    Grid.Row="8"
-                    HorizontalAlignment="Stretch"
-                    SelectionChanged="FormatSelector_SelectionChanged" />
-
+                </StackPanel>
 
                 <Button
-                    x:Name="StartPreviewButton"
-                    Content="Start Preview"
-                    Grid.Row="9"
-                    Margin="0,20,0,0"
-                    HorizontalAlignment="Stretch"
-                    Click="StartPreviewButton_Click" />
-
-
-                <Button
-                    x:Name="StartTrackingButton"
-                    Content="Start Tracking"
-                    Grid.Row="10"
-                    Margin="0,10,0,0"
-                    HorizontalAlignment="Stretch"
-                    Click="StartTrackingButton_Click" />
+                    x:Name="DevButton"
+                    Grid.Column="1"
+                    Content="DEV TOOLS"
+                    Style="{StaticResource NorthStarSubtleButton}"
+                    VerticalAlignment="Center"
+                    Click="DevButton_Click"/>
 
             </Grid>
 
+        </Border>
 
-            <!-- Camera preview -->
+
+        <!-- MAIN VIEW -->
+
+        <Grid
+            x:Name="MainView"
+            Grid.Row="1">
+
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+
+            <!-- CONTROL PANEL -->
+
+            <Border
+                Grid.Column="0"
+                Margin="20,18,10,18"
+                Padding="18"
+                Background="{StaticResource NorthStarSurface}"
+                BorderBrush="{StaticResource NorthStarBorder}"
+                BorderThickness="1"
+                CornerRadius="8">
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+
+                    <StackPanel Spacing="16">
+
+                        <StackPanel Spacing="4">
+
+                            <TextBlock
+                                Text="CAMERA CONFIGURATION"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="65"
+                                Foreground="{StaticResource NorthStarGreen}"/>
+
+                            <TextBlock
+                                Text="Configure your capture device"
+                                FontSize="12"
+                                Foreground="{StaticResource NorthStarSecondaryText}"/>
+
+                        </StackPanel>
+
+                        <Border
+                            Height="1"
+                            Background="{StaticResource NorthStarBorder}"/>
+
+
+                        <!-- CAMERA -->
+
+                        <StackPanel Spacing="6">
+
+                            <TextBlock
+                                Text="CAMERA"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="90"
+                                Foreground="{StaticResource NorthStarSecondaryText}"/>
+
+                            <ComboBox
+                                x:Name="CameraSelector"
+                                PlaceholderText="Select camera"
+                                PlaceholderForeground="{StaticResource NorthStarSecondaryText}"
+                                DisplayMemberPath="Name"
+                                Style="{StaticResource NorthStarComboBoxStyle}"
+                                SelectionChanged="CameraSelector_SelectionChanged"/>
+
+                        </StackPanel>
+
+
+                        <!-- RESOLUTION -->
+
+                        <StackPanel Spacing="6">
+
+                            <TextBlock
+                                Text="RESOLUTION"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="90"
+                                Foreground="{StaticResource NorthStarSecondaryText}"/>
+
+                            <ComboBox
+                                x:Name="ResolutionSelector"
+                                PlaceholderText="Select resolution"
+                                PlaceholderForeground="{StaticResource NorthStarSecondaryText}"
+                                Style="{StaticResource NorthStarComboBoxStyle}"
+                                SelectionChanged="ResolutionSelector_SelectionChanged"/>
+
+                        </StackPanel>
+
+
+                        <!-- FRAME RATE -->
+
+                        <StackPanel Spacing="6">
+
+                            <TextBlock
+                                Text="FRAME RATE"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="90"
+                                Foreground="{StaticResource NorthStarSecondaryText}"/>
+
+                            <ComboBox
+                                x:Name="FrameRateSelector"
+                                PlaceholderText="Select frame rate"
+                                PlaceholderForeground="{StaticResource NorthStarSecondaryText}"
+                                Style="{StaticResource NorthStarComboBoxStyle}"
+                                SelectionChanged="FrameRateSelector_SelectionChanged"/>
+
+                        </StackPanel>
+
+
+                        <!-- PIXEL FORMAT -->
+
+                        <StackPanel Spacing="6">
+
+                            <TextBlock
+                                Text="PIXEL FORMAT"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="90"
+                                Foreground="{StaticResource NorthStarSecondaryText}"/>
+
+                            <ComboBox
+                                x:Name="FormatSelector"
+                                PlaceholderText="Select format"
+                                PlaceholderForeground="{StaticResource NorthStarSecondaryText}"
+                                Style="{StaticResource NorthStarComboBoxStyle}"
+                                SelectionChanged="FormatSelector_SelectionChanged"/>
+
+                        </StackPanel>
+
+
+                        <Border
+                            Height="1"
+                            Background="{StaticResource NorthStarBorder}"
+                            Margin="0,2,0,2"/>
+
+
+                        <!-- OPERATIONS -->
+
+                        <StackPanel Spacing="8">
+
+                            <TextBlock
+                                Text="CAMERA OPERATIONS"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                CharacterSpacing="90"
+                                Foreground="{StaticResource NorthStarSecondaryText}"/>
+
+                            <Button
+                                x:Name="StartPreviewButton"
+                                Content="START PREVIEW"
+                                Style="{StaticResource NorthStarPrimaryButton}"
+                                HorizontalAlignment="Stretch"
+                                Click="StartPreviewButton_Click"/>
+
+                            <Button
+                                x:Name="StartTrackingButton"
+                                Content="START TRACKING"
+                                Style="{StaticResource NorthStarSecondaryButton}"
+                                HorizontalAlignment="Stretch"
+                                Click="StartTrackingButton_Click"/>
+
+                        </StackPanel>
+
+                    </StackPanel>
+
+                </ScrollViewer>
+
+            </Border>
+
+
+            <!-- PREVIEW PANEL -->
+
             <Border
                 Grid.Column="1"
-                Margin="20"
+                Margin="10,18,20,18"
+                Background="{StaticResource NorthStarSurface}"
+                BorderBrush="{StaticResource NorthStarBorder}"
                 BorderThickness="1"
-                BorderBrush="{StaticResource NorthStarGreen}">
+                CornerRadius="8">
 
                 <Grid>
 
-                    <Image
-                        x:Name="PreviewImage"
-                        Stretch="Uniform" />
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="54"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                    <Canvas
-                        x:Name="TrackingOverlay"
-                        IsHitTestVisible="False" />
 
-                    <TextBlock
-                        x:Name="FpsText"
-                        Text="FPS: 0"
-                        FontSize="18"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource NorthStarAccent}"
-                        HorizontalAlignment="Right"
-                        VerticalAlignment="Top"
-                        Margin="15" />
+                    <!-- PREVIEW HEADER -->
+
+                    <Border
+                        Grid.Row="0"
+                        Background="{StaticResource NorthStarSurfaceElevated}"
+                        BorderBrush="{StaticResource NorthStarBorder}"
+                        BorderThickness="0,0,0,1"
+                        CornerRadius="8,8,0,0">
+
+                        <Grid Margin="18,0">
+
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="10"
+                                VerticalAlignment="Center">
+
+                                <Border
+                                    Width="7"
+                                    Height="7"
+                                    CornerRadius="4"
+                                    Background="{StaticResource NorthStarGreen}"/>
+
+                                <TextBlock
+                                    Text="CAMERA PREVIEW"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    CharacterSpacing="80"
+                                    Foreground="{StaticResource NorthStarText}"
+                                    VerticalAlignment="Center"/>
+
+                            </StackPanel>
+
+
+                            <!-- FPS -->
+
+                            <Border
+                                Grid.Column="1"
+                                Background="{StaticResource NorthStarMagentaSurface}"
+                                BorderBrush="{StaticResource NorthStarMagentaBorder}"
+                                BorderThickness="1"
+                                CornerRadius="5"
+                                Padding="10,5"
+                                VerticalAlignment="Center">
+
+                                <TextBlock
+                                    x:Name="FpsText"
+                                    Text="FPS: 0"
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    CharacterSpacing="30"
+                                    Foreground="{StaticResource NorthStarAccent}"/>
+
+                            </Border>
+
+                        </Grid>
+
+                    </Border>
+
+
+                    <!-- PREVIEW CONTENT -->
+
+                    <Grid
+                        Grid.Row="1"
+                        Background="#090F09">
+
+                        <Image
+                            x:Name="PreviewImage"
+                            Stretch="Uniform"/>
+
+                        <Canvas
+                            x:Name="TrackingOverlay"
+                            IsHitTestVisible="False"/>
+
+                    </Grid>
 
                 </Grid>
 
@@ -220,13 +359,13 @@
         </Grid>
 
 
-        <!-- Developer page -->
+        <!-- DEVELOPER PAGE -->
+
         <Frame
             x:Name="DevFrame"
             Grid.Row="1"
-            Grid.Column="0"
-            Grid.ColumnSpan="2"
-            Visibility="Collapsed" />
+            Visibility="Collapsed"/>
 
     </Grid>
+
 </Window>

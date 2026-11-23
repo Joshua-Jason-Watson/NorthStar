@@ -1,30 +1,66 @@
-﻿using NorthStar.Formats;
+﻿
+using NorthStar.Formats;
 using NorthStar.Frames;
+
 using System;
 
 namespace NorthStar.Conversion
 {
+    // Converts YUY2 images into BGR24 images.
+    //
+    // Uses fixed-point arithmetic and processes two adjacent
+    // pixels together because YUY2 shares chroma information
+    // between horizontal pixel pairs.
     public sealed class YUY2Converter : IImageConverter
     {
+        // ============================================================
+        // Conversion coefficients
+        // ============================================================
+
+        // BT.709 limited-range coefficients.
+        // Values are scaled by 2^20.
+
+        private const int PrecisionBits = 20;
+
+        private const int FixedPointScale =
+            1 << PrecisionBits;
+
+        private const int RoundingOffset =
+            FixedPointScale >> 1;
+
+        private const int YCoefficient = 1220944;
+
+        private const int RedVCoefficient = 1879825;
+
+        private const int GreenUCoefficient = -223608;
+
+        private const int GreenVCoefficient = -558796;
+
+        private const int BlueUCoefficient = 2215014;
+
+
+        // ============================================================
+        // Format support
+        // ============================================================
+
         public bool CanConvert(
             NorthStarPixelFormat sourceFormat,
             NorthStarPixelFormat destinationFormat)
         {
-            return sourceFormat ==
-                       NorthStarPixelFormat.YUY2 &&
-                   destinationFormat ==
-                       NorthStarPixelFormat.BGR24;
+            return sourceFormat == NorthStarPixelFormat.YUY2 &&
+                   destinationFormat == NorthStarPixelFormat.BGR24;
         }
+
+
+        // ============================================================
+        // Conversion
+        // ============================================================
 
         public NorthStarImage Convert(
             NorthStarImage image,
             NorthStarPixelFormat destinationFormat)
         {
-            if (image == null)
-            {
-                throw new ArgumentNullException(
-                    nameof(image));
-            }
+            ArgumentNullException.ThrowIfNull(image);
 
             if (!CanConvert(
                 image.PixelFormat,
@@ -36,26 +72,27 @@ namespace NorthStar.Conversion
                     $"{destinationFormat}.");
             }
 
-            int width =
-                image.Width;
 
-            int height =
-                image.Height;
+            // ========================================================
+            // Input validation
+            // ========================================================
 
-            int stride =
-                image.Stride;
+            int width = image.Width;
 
-            if (stride <= 0)
+            int height = image.Height;
+
+            int stride = image.Stride;
+
+            if ((width & 1) != 0)
             {
                 throw new InvalidOperationException(
-                    "YUY2 image must have a positive stride.");
+                    "YUY2 image width must be even.");
             }
 
             int minimumStride =
-                checked(
-                    width * 2);
+                checked(width * 2);
 
-            if (stride < minimumStride)
+            if (stride <= 0 || stride < minimumStride)
             {
                 throw new InvalidOperationException(
                     "YUY2 image stride cannot be smaller " +
@@ -63,34 +100,36 @@ namespace NorthStar.Conversion
             }
 
             int expectedSize =
-                checked(
-                    stride *
-                    height);
+                checked(stride * height);
 
-            if (image.Data.Length <
-                expectedSize)
+            if (image.Data.Length < expectedSize)
             {
                 throw new InvalidOperationException(
                     "YUY2 image does not contain enough data " +
                     "for its declared dimensions and stride.");
             }
 
+
+            // ========================================================
+            // Output allocation
+            // ========================================================
+
             int outputStride =
-                checked(
-                    width * 3);
+                checked(width * 3);
 
             byte[] output =
                 new byte[
-                    checked(
-                        outputStride *
-                        height)];
+                    checked(outputStride * height)];
 
             ReadOnlySpan<byte> input =
                 image.Data.Span;
 
-            for (int y = 0;
-                 y < height;
-                 y++)
+
+            // ========================================================
+            // Pixel conversion
+            // ========================================================
+
+            for (int y = 0; y < height; y++)
             {
                 int inputRow =
                     y * stride;
@@ -98,72 +137,68 @@ namespace NorthStar.Conversion
                 int outputRow =
                     y * outputStride;
 
-                for (int x = 0;
-                     x < width;
-                     x++)
+                for (int x = 0; x < width; x += 2)
                 {
-                    int pairIndex =
-                        x / 2;
+                    // YUY2 stores pixels in the following order:
+                    //
+                    // Y0 U0 Y1 V0
+                    //
+                    // Both pixels share the same U and V values.
 
                     int inputIndex =
-                        inputRow +
-                        (pairIndex * 4);
+                        inputRow + (x * 2);
 
-                    int yValue;
+                    int y0 =
+                        input[inputIndex] - 16;
 
                     int u =
-                        input[inputIndex + 1];
+                        input[inputIndex + 1] - 128;
+
+                    int y1 =
+                        input[inputIndex + 2] - 16;
 
                     int v =
-                        input[inputIndex + 3];
+                        input[inputIndex + 3] - 128;
 
-                    if ((x & 1) == 0)
-                    {
-                        yValue =
-                            input[inputIndex];
-                    }
-                    else
-                    {
-                        yValue =
-                            input[inputIndex + 2];
-                    }
 
-                    double c =
-                        yValue - 16.0;
+                    // Calculate chroma contributions once
+                    // for both pixels.
+                    int blueChroma =
+                        BlueUCoefficient * u;
 
-                    double d =
-                        u - 128.0;
+                    int greenChroma =
+                        GreenUCoefficient * u +
+                        GreenVCoefficient * v;
 
-                    double e =
-                        v - 128.0;
+                    int redChroma =
+                        RedVCoefficient * v;
 
-                    double red =
-                        1.164383 * c +
-                        1.792741 * e;
 
-                    double green =
-                        1.164383 * c -
-                        0.213249 * d -
-                        0.532909 * e;
+                    // First pixel.
+                    ConvertPixel(
+                        output,
+                        outputRow + (x * 3),
+                        YCoefficient * y0,
+                        blueChroma,
+                        greenChroma,
+                        redChroma);
 
-                    double blue =
-                        1.164383 * c +
-                        2.112402 * d;
 
-                    int outputIndex =
-                        outputRow +
-                        (x * 3);
-
-                    output[outputIndex] =
-                        ClampToByte(blue);
-
-                    output[outputIndex + 1] =
-                        ClampToByte(green);
-
-                    output[outputIndex + 2] =
-                        ClampToByte(red);
+                    // Second pixel.
+                    ConvertPixel(
+                        output,
+                        outputRow + (x * 3) + 3,
+                        YCoefficient * y1,
+                        blueChroma,
+                        greenChroma,
+                        redChroma);
                 }
             }
+
+
+            // ========================================================
+            // Result
+            // ========================================================
 
             return new NorthStarImage(
                 width,
@@ -175,21 +210,75 @@ namespace NorthStar.Conversion
                 output);
         }
 
-        private static byte ClampToByte(
-            double value)
+
+        // ============================================================
+        // Individual pixel conversion
+        // ============================================================
+
+        private static void ConvertPixel(
+            Span<byte> output,
+            int outputIndex,
+            int yComponent,
+            int blueChroma,
+            int greenChroma,
+            int redChroma)
+        {
+            int blue =
+                yComponent + blueChroma;
+
+            int green =
+                yComponent + greenChroma;
+
+            int red =
+                yComponent + redChroma;
+
+
+            // NorthStar uses BGR24 channel ordering.
+            output[outputIndex] =
+                ClampToByte(blue);
+
+            output[outputIndex + 1] =
+                ClampToByte(green);
+
+            output[outputIndex + 2] =
+                ClampToByte(red);
+        }
+
+
+        // ============================================================
+        // Fixed-point clamping and rounding
+        // ============================================================
+
+        private static byte ClampToByte(int value)
         {
             if (value <= 0)
             {
                 return 0;
             }
 
-            if (value >= 255)
+            int maximum =
+                255 * FixedPointScale;
+
+            if (value >= maximum)
             {
                 return 255;
             }
 
-            return (byte)Math.Round(
-                value);
+            // Match Math.Round's default ties-to-even behaviour.
+            int whole =
+                value >> PrecisionBits;
+
+            int remainder =
+                value & (FixedPointScale - 1);
+
+            if (remainder > RoundingOffset ||
+                (remainder == RoundingOffset &&
+                 (whole & 1) != 0))
+            {
+                whole++;
+            }
+
+            return (byte)whole;
         }
     }
 }

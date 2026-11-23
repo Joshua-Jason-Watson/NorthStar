@@ -1,3 +1,4 @@
+
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 
@@ -165,6 +166,33 @@ namespace NorthStar.UI.Pages
                 PipelineTotalTimeText.Text =
                     FormatMilliseconds(
                         metrics.TotalMilliseconds);
+
+
+                // Camera capture breakdown
+
+                ReadSampleTimeText.Text =
+                    FormatMilliseconds(
+                        metrics.CameraCapture.ReadSampleMilliseconds);
+
+                ContiguousBufferTimeText.Text =
+                    FormatMilliseconds(
+                        metrics.CameraCapture.ContiguousBufferMilliseconds);
+
+                BufferLockTimeText.Text =
+                    FormatMilliseconds(
+                        metrics.CameraCapture.BufferLockMilliseconds);
+
+                BufferAllocationTimeText.Text =
+                    FormatMilliseconds(
+                        metrics.CameraCapture.BufferAllocationMilliseconds);
+
+                BufferCopyTimeText.Text =
+                    FormatMilliseconds(
+                        metrics.CameraCapture.BufferCopyMilliseconds);
+
+                FrameTimestampIntervalTimeText.Text =
+                    FormatMilliseconds(
+                        metrics.CameraCapture.FrameTimestampIntervalMilliseconds);
             }
             else
             {
@@ -230,6 +258,25 @@ namespace NorthStar.UI.Pages
                 "—";
 
             PipelineTotalTimeText.Text =
+                "—";
+
+
+            ReadSampleTimeText.Text =
+                "—";
+
+            ContiguousBufferTimeText.Text =
+                "—";
+
+            BufferLockTimeText.Text =
+                "—";
+
+            BufferAllocationTimeText.Text =
+                "—";
+
+            BufferCopyTimeText.Text =
+                "—";
+
+            FrameTimestampIntervalTimeText.Text =
                 "—";
         }
 

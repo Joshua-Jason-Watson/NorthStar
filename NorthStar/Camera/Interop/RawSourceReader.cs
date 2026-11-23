@@ -1,24 +1,121 @@
-﻿using System;
+﻿
+using System;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+
 using Windows.Win32.Foundation;
 
 namespace NorthStar.Camera.Interop
 {
+    // Owns the native IMFSourceReader and IMFSourceReaderEx
+    // interfaces and exposes the operations required by NorthStar.
+    //
+    // Continuous sample acquisition and frame buffering are handled
+    // by SourceReaderCallback.
     internal unsafe sealed class RawSourceReader : IDisposable
     {
-        private void* pointer;
-        private bool disposed;
+        // ============================================================
+        // Native interfaces
+        // ============================================================
 
-        public RawSourceReader(
-            void* pointer)
+        private void* pointer;
+
+        private void* extendedPointer;
+
+        private int disposed;
+
+        private static readonly Guid SourceReaderExIid =
+            new("7B981CF0-560E-4116-9875-B099895F23D7");
+
+
+        // ============================================================
+        // Constructor
+        // ============================================================
+
+        public RawSourceReader(void* pointer)
         {
             if (pointer == null)
             {
-                throw new ArgumentNullException(
-                    nameof(pointer));
+                throw new ArgumentNullException(nameof(pointer));
             }
 
             this.pointer = pointer;
+
+            void* queriedPointer = null;
+
+            try
+            {
+                Guid iid = SourceReaderExIid;
+
+                void** vtable = *(void***)pointer;
+
+                HRESULT hr =
+                    ((delegate* unmanaged[Stdcall]<
+                        void*, Guid*, void**, HRESULT>)
+                    vtable[0])(
+                        pointer,
+                        &iid,
+                        &queriedPointer);
+
+                hr.ThrowOnFailure();
+
+                if (queriedPointer == null)
+                {
+                    throw new InvalidOperationException(
+                        "Media Foundation returned a null IMFSourceReaderEx interface.");
+                }
+
+                extendedPointer = queriedPointer;
+            }
+            catch
+            {
+                ReleaseComPointer(queriedPointer);
+
+                ReleaseComPointer(this.pointer);
+
+                this.pointer = null;
+
+                throw;
+            }
         }
+
+
+        // ============================================================
+        // Native media type configuration
+        // ============================================================
+
+        public HRESULT SetNativeMediaType(
+            uint streamIndex,
+            void* mediaType,
+            out uint streamFlags)
+        {
+            ThrowIfDisposed();
+
+            if (mediaType == null)
+            {
+                throw new ArgumentNullException(nameof(mediaType));
+            }
+
+            uint result = 0;
+
+            void** vtable =
+                *(void***)extendedPointer;
+
+            HRESULT hr =
+                ((delegate* unmanaged[Stdcall]<
+                    void*, uint, void*, uint*, HRESULT>)
+                vtable[13])(
+                    extendedPointer,
+                    streamIndex,
+                    mediaType,
+                    &result);
+
+            streamFlags = result;
+
+            return hr;
+        }
+
 
         public HRESULT GetNativeMediaType(
             uint streamIndex,
@@ -31,11 +128,7 @@ namespace NorthStar.Camera.Interop
 
             HRESULT hr =
                 ((delegate* unmanaged[Stdcall]<
-                    void*,
-                    uint,
-                    uint,
-                    void**,
-                    HRESULT>)
+                    void*, uint, uint, void**, HRESULT>)
                 GetMethod(5))(
                     pointer,
                     streamIndex,
@@ -47,77 +140,136 @@ namespace NorthStar.Camera.Interop
             return hr;
         }
 
-        public HRESULT SetCurrentMediaType(
+
+        // ============================================================
+        // Continuous capture
+        // ============================================================
+
+        // Starts continuous asynchronous sample acquisition.
+        //
+        // SourceReaderCallback immediately requests subsequent samples
+        // when Media Foundation delivers each completed sample.
+        public void StartContinuousCapture(
             uint streamIndex,
-            void* mediaType)
+            SourceReaderCallback callback)
+        {
+            ThrowIfDisposed();
+
+            ArgumentNullException.ThrowIfNull(callback);
+
+            callback.StartContinuousCapture(
+                () => RequestSample(streamIndex, 0),
+                streamIndex);
+        }
+
+
+        // ============================================================
+        // Native asynchronous sample request
+        // ============================================================
+
+        // Requests another sample from Media Foundation.
+        //
+        // Output parameters must be null when using the asynchronous
+        // Source Reader callback mechanism.
+        private HRESULT RequestSample(
+            uint streamIndex,
+            uint controlFlags)
         {
             ThrowIfDisposed();
 
             return
                 ((delegate* unmanaged[Stdcall]<
-                    void*,
-                    uint,
-                    uint*,
-                    void*,
-                    HRESULT>)
-                GetMethod(7))(
-                    pointer,
-                    streamIndex,
-                    null,
-                    mediaType);
-        }
-
-        public HRESULT ReadSample(
-            uint streamIndex,
-            uint controlFlags,
-            out uint actualStreamIndex,
-            out uint streamFlags,
-            out long timestamp,
-            out void* sample)
-        {
-            ThrowIfDisposed();
-
-            uint actualStreamIndexValue = 0;
-            uint streamFlagsValue = 0;
-            long timestampValue = 0;
-            void* sampleValue = null;
-
-            HRESULT hr =
-                ((delegate* unmanaged[Stdcall]<
-                    void*,
-                    uint,
-                    uint,
-                    uint*,
-                    uint*,
-                    long*,
-                    void**,
-                    HRESULT>)
+                    void*, uint, uint,
+                    uint*, uint*, long*, void**, HRESULT>)
                 GetMethod(9))(
                     pointer,
                     streamIndex,
                     controlFlags,
-                    &actualStreamIndexValue,
-                    &streamFlagsValue,
-                    &timestampValue,
-                    &sampleValue);
-
-            actualStreamIndex =
-                actualStreamIndexValue;
-
-            streamFlags =
-                streamFlagsValue;
-
-            timestamp =
-                timestampValue;
-
-            sample =
-                sampleValue;
-
-            return hr;
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
-        private void* GetMethod(
-            int index)
+
+        // ============================================================
+        // Sample consumption
+        // ============================================================
+
+        // Retrieves the next available sample from the callback's
+        // bounded queue.
+        //
+        // Does not initiate a new native read. Capture is already
+        // running independently.
+        public Task<SourceReaderSampleResult> TakeSampleAsync(
+            SourceReaderCallback callback)
+        {
+            ThrowIfDisposed();
+
+            ArgumentNullException.ThrowIfNull(callback);
+
+            return callback.TakeSampleAsync();
+        }
+
+
+        // ============================================================
+        // Flush
+        // ============================================================
+
+        // Initiates an asynchronous Source Reader flush.
+        //
+        // Completion is reported through IMFSourceReaderCallback.OnFlush.
+        public Task FlushAsync(
+            uint streamIndex,
+            SourceReaderCallback callback)
+        {
+            ThrowIfDisposed();
+
+            ArgumentNullException.ThrowIfNull(callback);
+
+            Task completion =
+                callback.PrepareFlush();
+
+            try
+            {
+                HRESULT hr =
+                    FlushNative(streamIndex);
+
+                if (hr.Value < 0)
+                {
+                    throw Marshal.GetExceptionForHR(hr.Value)
+                        ?? new COMException(
+                            "Media Foundation could not flush the source reader.",
+                            hr.Value);
+                }
+            }
+            catch (Exception exception)
+            {
+                callback.FailFlush(exception);
+            }
+
+            return completion;
+        }
+
+
+        private HRESULT FlushNative(uint streamIndex)
+        {
+            ThrowIfDisposed();
+
+            return
+                ((delegate* unmanaged[Stdcall]<
+                    void*, uint, HRESULT>)
+                GetMethod(10))(
+                    pointer,
+                    streamIndex);
+        }
+
+
+        // ============================================================
+        // COM helpers
+        // ============================================================
+
+        private void* GetMethod(int index)
         {
             void** vtable =
                 *(void***)pointer;
@@ -125,36 +277,55 @@ namespace NorthStar.Camera.Interop
             return vtable[index];
         }
 
-        public void Dispose()
+
+        private static void ReleaseComPointer(void* pointer)
         {
-            if (disposed)
+            if (pointer == null)
             {
                 return;
             }
 
-            disposed = true;
+            void** vtable =
+                *(void***)pointer;
 
-            if (pointer != null)
+            ((delegate* unmanaged[Stdcall]<void*, uint>)
+                vtable[2])(pointer);
+        }
+
+
+        // ============================================================
+        // Disposal
+        // ============================================================
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0)
             {
-                void** vtable =
-                    *(void***)pointer;
-
-                ((delegate* unmanaged[Stdcall]<
-                    void*,
-                    uint>)
-                vtable[2])(
-                    pointer);
-
-                pointer = null;
+                return;
             }
+
+            // The owner must complete the Source Reader flush
+            // before disposing this object.
+            ReleaseComPointer(extendedPointer);
+
+            extendedPointer = null;
+
+            ReleaseComPointer(pointer);
+
+            pointer = null;
 
             GC.SuppressFinalize(this);
         }
 
+
+        // ============================================================
+        // Validation
+        // ============================================================
+
         private void ThrowIfDisposed()
         {
             ObjectDisposedException.ThrowIf(
-                disposed,
+                Volatile.Read(ref disposed) != 0,
                 this);
         }
     }

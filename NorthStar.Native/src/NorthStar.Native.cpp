@@ -5,6 +5,7 @@
 #include <litert/cc/litert_environment.h>
 #include <litert/cc/litert_environment_options.h>
 #include <litert/cc/litert_tensor_buffer.h>
+#include <litert/cc/litert_ranked_tensor_type.h>
 
 #include <absl/types/span.h>
 
@@ -47,6 +48,92 @@ namespace northstar_native_detail
         const litert::Error& error) noexcept
     {
         return SetFailure(status, operation, error.Message().c_str());
+    }
+
+    NSN_Status PopulateTensorInfo(
+        const litert::TensorBuffer& tensor_buffer,
+        NSN_TensorInfo* out_tensor_info,
+        const char* operation)
+    {
+        try
+        {
+            auto tensor_type_result =
+                tensor_buffer.TensorType();
+
+            if (!tensor_type_result.HasValue())
+            {
+                return SetLiteRtFailure(
+                    NSN_STATUS_TENSOR_METADATA_QUERY_FAILED,
+                    operation,
+                    tensor_type_result.Error());
+            }
+
+            const auto& tensor_type =
+                tensor_type_result.Value();
+
+            const auto dimensions =
+                tensor_type.Layout().Dimensions();
+
+            if (dimensions.size() > NSN_MAX_TENSOR_RANK)
+            {
+                return SetFailure(
+                    NSN_STATUS_TENSOR_METADATA_QUERY_FAILED,
+                    operation,
+                    "The tensor rank exceeds the native API limit.");
+            }
+
+            auto packed_size_result =
+                tensor_buffer.PackedSize();
+
+            if (!packed_size_result.HasValue())
+            {
+                return SetLiteRtFailure(
+                    NSN_STATUS_TENSOR_METADATA_QUERY_FAILED,
+                    operation,
+                    packed_size_result.Error());
+            }
+
+            NSN_TensorInfo tensor_info = {};
+
+            tensor_info.element_type =
+                static_cast<uint32_t>(tensor_type.ElementType());
+
+            tensor_info.rank =
+                static_cast<uint32_t>(dimensions.size());
+
+            for (std::size_t i = 0; i < dimensions.size(); ++i)
+            {
+                tensor_info.dimensions[i] = dimensions[i];
+            }
+
+            tensor_info.packed_size =
+                static_cast<uint64_t>(packed_size_result.Value());
+
+            *out_tensor_info = tensor_info;
+
+            return NSN_STATUS_OK;
+        }
+        catch (const std::bad_alloc&)
+        {
+            return SetFailure(
+                NSN_STATUS_OUT_OF_MEMORY,
+                operation,
+                "Memory allocation failed.");
+        }
+        catch (const std::exception& exception)
+        {
+            return SetFailure(
+                NSN_STATUS_INTERNAL_ERROR,
+                operation,
+                exception.what());
+        }
+        catch (...)
+        {
+            return SetFailure(
+                NSN_STATUS_INTERNAL_ERROR,
+                operation,
+                "An unknown native exception occurred.");
+        }
     }
 
     struct RuntimeState final
@@ -690,6 +777,71 @@ NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelOutputCount(
 
     *out_count = static_cast<uint32_t>(session->output_buffers.size());
     return NSN_STATUS_OK;
+}
+
+
+NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelInputTensorInfo(
+    const NSN_ModelSession* session,
+    uint32_t input_index,
+    NSN_TensorInfo* out_tensor_info)
+{
+    using namespace northstar_native_detail;
+    ClearLastError();
+
+    if (session == nullptr || out_tensor_info == nullptr)
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelInputTensorInfo",
+            "session and out_tensor_info cannot be null.");
+    }
+
+    *out_tensor_info = {};
+
+    if (input_index >= session->input_buffers.size())
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelInputTensorInfo",
+            "The input tensor index is out of range.");
+    }
+
+    return PopulateTensorInfo(
+        session->input_buffers[input_index],
+        out_tensor_info,
+        "NSN_GetModelInputTensorInfo");
+}
+
+NSN_Status NORTHSTAR_NATIVE_CALL NSN_GetModelOutputTensorInfo(
+    const NSN_ModelSession* session,
+    uint32_t output_index,
+    NSN_TensorInfo* out_tensor_info)
+{
+    using namespace northstar_native_detail;
+    ClearLastError();
+
+    if (session == nullptr || out_tensor_info == nullptr)
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorInfo",
+            "session and out_tensor_info cannot be null.");
+    }
+
+    *out_tensor_info = {};
+
+    if (output_index >= session->output_buffers.size())
+    {
+        return SetFailure(
+            NSN_STATUS_INVALID_ARGUMENT,
+            "NSN_GetModelOutputTensorInfo",
+            "The output tensor index is out of range.");
+    }
+
+    return PopulateTensorInfo(
+        session->output_buffers[output_index],
+        out_tensor_info,
+        "NSN_GetModelOutputTensorInfo");
 }
 
 const char* NORTHSTAR_NATIVE_CALL NSN_GetLastError(void)

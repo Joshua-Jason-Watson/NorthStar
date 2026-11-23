@@ -59,7 +59,6 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-
                         <TextBlock
                             Text="Capture"
                             Grid.Row="0"
@@ -70,7 +69,6 @@
                             Text="—"
                             Grid.Row="0"
                             Grid.Column="1" />
-
 
                         <TextBlock
                             Text="Decode"
@@ -83,7 +81,6 @@
                             Grid.Row="1"
                             Grid.Column="1" />
 
-
                         <TextBlock
                             Text="Conversion"
                             Grid.Row="2"
@@ -94,7 +91,6 @@
                             Text="—"
                             Grid.Row="2"
                             Grid.Column="1" />
-
 
                         <TextBlock
                             Text="Total"
@@ -107,6 +103,109 @@
                             Text="—"
                             FontWeight="Bold"
                             Grid.Row="3"
+                            Grid.Column="1" />
+
+                    </Grid>
+
+                </StackPanel>
+
+            </Border>
+
+
+            <!-- Camera capture breakdown -->
+            <Border
+                Padding="20"
+                BorderThickness="1"
+                BorderBrush="{StaticResource NorthStarGreen}">
+
+                <StackPanel
+                    Spacing="10">
+
+                    <TextBlock
+                        Text="Camera Capture Breakdown"
+                        FontSize="22"
+                        Foreground="{StaticResource NorthStarGreen}" />
+
+                    <Grid>
+
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock
+                            Text="Read Sample"
+                            Grid.Row="0"
+                            Grid.Column="0" />
+
+                        <TextBlock
+                            x:Name="ReadSampleTimeText"
+                            Text="—"
+                            Grid.Row="0"
+                            Grid.Column="1" />
+
+                        <TextBlock
+                            Text="Contiguous Buffer"
+                            Grid.Row="1"
+                            Grid.Column="0" />
+
+                        <TextBlock
+                            x:Name="ContiguousBufferTimeText"
+                            Text="—"
+                            Grid.Row="1"
+                            Grid.Column="1" />
+
+                        <TextBlock
+                            Text="Buffer Lock"
+                            Grid.Row="2"
+                            Grid.Column="0" />
+
+                        <TextBlock
+                            x:Name="BufferLockTimeText"
+                            Text="—"
+                            Grid.Row="2"
+                            Grid.Column="1" />
+
+                        <TextBlock
+                            Text="Buffer Allocation"
+                            Grid.Row="3"
+                            Grid.Column="0" />
+
+                        <TextBlock
+                            x:Name="BufferAllocationTimeText"
+                            Text="—"
+                            Grid.Row="3"
+                            Grid.Column="1" />
+
+                        <TextBlock
+                            Text="Buffer Copy"
+                            Grid.Row="4"
+                            Grid.Column="0" />
+
+                        <TextBlock
+                            x:Name="BufferCopyTimeText"
+                            Text="—"
+                            Grid.Row="4"
+                            Grid.Column="1" />
+
+                        <TextBlock
+                            Text="Frame Timestamp Interval"
+                            Grid.Row="5"
+                            Grid.Column="0" />
+
+                        <TextBlock
+                            x:Name="FrameTimestampIntervalTimeText"
+                            Text="—"
+                            Grid.Row="5"
                             Grid.Column="1" />
 
                     </Grid>
@@ -145,7 +244,6 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-
                         <TextBlock
                             Text="Preprocessing"
                             Grid.Row="0"
@@ -156,7 +254,6 @@
                             Text="—"
                             Grid.Row="0"
                             Grid.Column="1" />
-
 
                         <TextBlock
                             Text="Inference"
@@ -169,7 +266,6 @@
                             Grid.Row="1"
                             Grid.Column="1" />
 
-
                         <TextBlock
                             Text="Pose Decode"
                             Grid.Row="2"
@@ -181,7 +277,6 @@
                             Grid.Row="2"
                             Grid.Column="1" />
 
-
                         <TextBlock
                             Text="Coordinate Transform"
                             Grid.Row="3"
@@ -192,7 +287,6 @@
                             Text="—"
                             Grid.Row="3"
                             Grid.Column="1" />
-
 
                         <TextBlock
                             Text="Total"

@@ -1,0 +1,44 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-msvc-release",
+      "displayName": "NorthStar Native - Windows x64 Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../tools/NorthStar.Native-build",
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "toolset": {
+        "value": "host=x64,version=14.52",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_MAKE_PROGRAM": {
+          "type": "FILEPATH",
+          "value": "C:/Program Files/Microsoft Visual Studio/18/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe"
+        },
+        "LITERT_CC_SDK_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/../tools/LiteRT-SDK-2.4.0/litert_cc_sdk"
+        },
+        "LITERT_PREBUILT_DIR": {
+          "type": "PATH",
+          "value": "${sourceDir}/../tools/LiteRT-SDK-2.4.0/windows_x86_64"
+        }
+      },
+      "vendor": {
+        "microsoft.com/VisualStudioSettings/CMake/1.0": {
+          "hostOS": ["Windows"]
+        }
+      }
+    }
+  ]
+}

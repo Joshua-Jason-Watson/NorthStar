@@ -7,6 +7,8 @@ using NorthStar.Processing;
 using NorthStar.Tracking;
 
 using System;
+using System.Linq;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,11 +16,11 @@ namespace NorthStar
 {
     // Owns the lifetime of the active NorthStar processing engine.
     //
-    // The runtime coordinates camera capture, image processing,
-    // preview output, and optional tracking.
+    // Camera acquisition and frame processing operate independently.
+    // Captured frames are exchanged through a latest-frame buffer.
     //
-    // The runtime does not own the UI and does not decide which
-    // camera or capability the user selects.
+    // The runtime does not own the UI or decide which camera or
+    // capability the user selects.
     public sealed class NorthStarRuntime : IDisposable
     {
         // ============================================================
@@ -47,7 +49,11 @@ namespace NorthStar
 
         private CancellationTokenSource? cancellationSource;
 
+        private Task? captureTask;
+
         private Task? processingTask;
+
+        private LatestFrameBuffer? frameBuffer;
 
         private bool running;
 
@@ -71,8 +77,7 @@ namespace NorthStar
         private readonly object pipelineMetricsLock =
             new object();
 
-        private NorthStarPipelineMetrics?
-            latestPipelineMetrics;
+        private NorthStarPipelineMetrics? latestPipelineMetrics;
 
 
         // ============================================================
@@ -89,8 +94,7 @@ namespace NorthStar
                     nameof(modelPath));
             }
 
-            this.modelPath =
-                modelPath;
+            this.modelPath = modelPath;
         }
 
 
@@ -185,19 +189,17 @@ namespace NorthStar
                 new WindowsCameraDeviceFactory();
 
             CameraDevice newCamera =
-                factory.Open(
-                    cameraDescriptor);
+                factory.Open(cameraDescriptor);
 
-            NorthStarPipeline? newPipeline =
-                null;
+            NorthStarPipeline? newPipeline = null;
 
-            CancellationTokenSource? newCancellationSource =
-                null;
+            CancellationTokenSource? newCancellationSource = null;
+
+            LatestFrameBuffer? newFrameBuffer = null;
 
             try
             {
-                newCamera.Configure(
-                    capability);
+                newCamera.Configure(capability);
 
                 FrameDecoderRegistry decoderRegistry =
                     new FrameDecoderRegistry();
@@ -224,32 +226,64 @@ namespace NorthStar
                         decoderRegistry,
                         converterRegistry);
 
+                newFrameBuffer =
+                    new LatestFrameBuffer();
+
                 newCancellationSource =
                     new CancellationTokenSource();
 
-                camera =
-                    newCamera;
 
-                pipeline =
+                // Preserve references for both workers.
+                NorthStarPipeline activePipeline =
                     newPipeline;
 
-                cancellationSource =
+                LatestFrameBuffer activeFrameBuffer =
+                    newFrameBuffer;
+
+                CancellationTokenSource activeCancellationSource =
                     newCancellationSource;
 
-                running =
-                    true;
 
+                camera = newCamera;
+                pipeline = activePipeline;
+                frameBuffer = activeFrameBuffer;
+                cancellationSource = activeCancellationSource;
+
+                running = true;
+
+
+                // Start asynchronous camera acquisition independently.
+                captureTask =
+                    Task.Run(
+                        () => CaptureLoopAsync(
+                            activePipeline,
+                            activeFrameBuffer,
+                            activeCancellationSource));
+
+
+                // Start image processing independently.
                 processingTask =
                     Task.Run(
-                        ProcessingLoop);
+                        () => ProcessingLoop(
+                            activePipeline,
+                            activeFrameBuffer,
+                            activeCancellationSource));
 
+
+                // Ownership has transferred to the runtime.
                 newCamera = null!;
                 newPipeline = null;
+                newFrameBuffer = null;
                 newCancellationSource = null;
             }
             catch
             {
+                running = false;
+
+                newFrameBuffer?.Dispose();
+
                 newCancellationSource?.Dispose();
+
                 newCamera.Dispose();
 
                 throw;
@@ -278,20 +312,15 @@ namespace NorthStar
             }
 
             PoseModel newPoseModel =
-                new PoseModel(
-                    modelPath);
+                new PoseModel(modelPath);
 
             TrackingProcessor newProcessor =
-                new TrackingProcessor(
-                    newPoseModel);
+                new TrackingProcessor(newPoseModel);
 
             try
             {
-                poseModel =
-                    newPoseModel;
-
-                processor =
-                    newProcessor;
+                poseModel = newPoseModel;
+                processor = newProcessor;
 
                 newProcessor.Start();
             }
@@ -329,48 +358,136 @@ namespace NorthStar
 
 
         // ============================================================
-        // Camera processing loop
+        // Camera capture worker
         // ============================================================
 
-        private void ProcessingLoop()
+        private async Task CaptureLoopAsync(
+            NorthStarPipeline currentPipeline,
+            LatestFrameBuffer currentFrameBuffer,
+            CancellationTokenSource currentCancellationSource)
         {
             CancellationToken token =
-                cancellationSource!.Token;
+                currentCancellationSource.Token;
 
             try
             {
                 while (!token.IsCancellationRequested)
                 {
+                    long captureStartTimestamp =
+                        Stopwatch.GetTimestamp();
+
+                    // Wait asynchronously for the next camera frame.
+                    (
+                        NorthStarFrame Frame,
+                        CameraCaptureMetrics CaptureMetrics
+                    ) capturedResult =
+                        await currentPipeline.CaptureFrameAsync(token)
+                            .ConfigureAwait(false);
+
+                    double captureMilliseconds =
+                        GetElapsedMilliseconds(
+                            captureStartTimestamp);
+
+                    if (token.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    CapturedFrame capturedFrame =
+                        new CapturedFrame(
+                            capturedResult.Frame,
+                            capturedResult.CaptureMetrics,
+                            captureMilliseconds);
+
+                    currentFrameBuffer.Publish(
+                        capturedFrame);
+                }
+            }
+            catch (OperationCanceledException)
+                when (token.IsCancellationRequested)
+            {
+                // Normal shutdown.
+            }
+            catch (Exception exception)
+            {
+                if (!token.IsCancellationRequested)
+                {
+                    currentCancellationSource.Cancel();
+
+                    ProcessingFailed?.Invoke(
+                        this,
+                        exception);
+                }
+            }
+            finally
+            {
+                // Notify the processing worker that no more
+                // camera frames will be produced.
+                currentFrameBuffer.Complete();
+            }
+        }
+
+
+        // ============================================================
+        // Frame processing worker
+        // ============================================================
+
+        private void ProcessingLoop(
+            NorthStarPipeline currentPipeline,
+            LatestFrameBuffer currentFrameBuffer,
+            CancellationTokenSource currentCancellationSource)
+        {
+            CancellationToken token =
+                currentCancellationSource.Token;
+
+            try
+            {
+                while (!token.IsCancellationRequested)
+                {
+                    CapturedFrame? capturedFrame =
+                        currentFrameBuffer.Take(token);
+
+                    if (capturedFrame == null)
+                    {
+                        break;
+                    }
+
                     NorthStarImage image =
-                        pipeline!.ProcessNextFrame(
+                        currentPipeline.ProcessCapturedFrame(
+                            capturedFrame.Frame,
+                            capturedFrame.CaptureMetrics,
+                            capturedFrame.CaptureMilliseconds,
                             out NorthStarPipelineMetrics metrics);
+
 
                     lock (imageLock)
                     {
-                        latestImage =
-                            image;
+                        latestImage = image;
                     }
 
                     lock (pipelineMetricsLock)
                     {
-                        latestPipelineMetrics =
-                            metrics;
+                        latestPipelineMetrics = metrics;
                     }
 
-                    processor?.SubmitFrame(
-                        image);
+                    processor?.SubmitFrame(image);
                 }
+            }
+            catch (OperationCanceledException)
+                when (token.IsCancellationRequested)
+            {
+                // Normal worker shutdown.
             }
             catch (Exception exception)
             {
-                if (token.IsCancellationRequested)
+                if (!token.IsCancellationRequested)
                 {
-                    return;
-                }
+                    currentCancellationSource.Cancel();
 
-                ProcessingFailed?.Invoke(
-                    this,
-                    exception);
+                    ProcessingFailed?.Invoke(
+                        this,
+                        exception);
+                }
             }
         }
 
@@ -393,33 +510,48 @@ namespace NorthStar
                 return;
             }
 
-            running =
-                false;
+            running = false;
 
-            StopTracking();
-
+            // Cancelling the runtime token also cancels the
+            // outstanding asynchronous camera read.
             cancellationSource?.Cancel();
 
-            Task? task =
+            Task? currentCaptureTask =
+                captureTask;
+
+            Task? currentProcessingTask =
                 processingTask;
 
-            if (task != null)
+            // Wait for both workers before disposing any resources
+            // they may still be using.
+            try
             {
-                try
-                {
-                    task.Wait(
-                        TimeSpan.FromSeconds(2));
-                }
-                catch (AggregateException exception)
-                {
-                    exception.Handle(
-                        innerException =>
-                            innerException is OperationCanceledException);
-                }
+                Task[] activeTasks =
+                    new[] {
+                        currentCaptureTask,
+                        currentProcessingTask
+                    }
+                    .OfType<Task>()
+                    .ToArray();
+
+                Task.WaitAll(activeTasks);
+            }
+            catch (AggregateException exception)
+            {
+                exception.Handle(
+                    innerException =>
+                        innerException is OperationCanceledException);
             }
 
-            processingTask =
-                null;
+            // Tracking can now be safely stopped because the
+            // processing worker is no longer submitting frames.
+            StopTracking();
+
+            captureTask = null;
+            processingTask = null;
+
+            frameBuffer?.Dispose();
+            frameBuffer = null;
 
             cancellationSource?.Dispose();
             cancellationSource = null;
@@ -431,14 +563,12 @@ namespace NorthStar
 
             lock (imageLock)
             {
-                latestImage =
-                    null;
+                latestImage = null;
             }
 
             lock (pipelineMetricsLock)
             {
-                latestPipelineMetrics =
-                    null;
+                latestPipelineMetrics = null;
             }
         }
 
@@ -456,11 +586,27 @@ namespace NorthStar
 
             Stop();
 
-            disposed =
-                true;
+            disposed = true;
 
-            GC.SuppressFinalize(
-                this);
+            GC.SuppressFinalize(this);
+        }
+
+
+        // ============================================================
+        // Timing
+        // ============================================================
+
+        private static double GetElapsedMilliseconds(
+            long startTimestamp)
+        {
+            long elapsedTimestamp =
+                Stopwatch.GetTimestamp() -
+                startTimestamp;
+
+            return
+                elapsedTimestamp *
+                1000.0 /
+                Stopwatch.Frequency;
         }
 
 
