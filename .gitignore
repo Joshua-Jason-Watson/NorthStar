@@ -69,3 +69,19 @@ _ReSharper*/
 
 # Windows generated files
 $RECYCLE.BIN/
+
+# CMake generated files and machine-specific configuration
+**/CMakeUserPresets.json
+**/CMakeCache.txt
+**/CMakeFiles/
+**/_deps/
+**/Testing/
+**/cmake-build-*/
+**/out/
+
+# NorthStar local development tools and build output
+/tools/NorthStar.Native-build/
+/tools/LiteRT/
+/tools/LiteRT-SDK-2.4.0/
+/tools/python313/
+/tools/bazelisk.exe
