@@ -6,6 +6,7 @@
 #include <litert/cc/litert_environment_options.h>
 #include <litert/cc/litert_tensor_buffer.h>
 #include <litert/cc/litert_ranked_tensor_type.h>
+#include <litert/cc/litert_element_type.h>
 
 #include <absl/types/span.h>
 
@@ -48,6 +49,94 @@ namespace northstar_native_detail
         const litert::Error& error) noexcept
     {
         return SetFailure(status, operation, error.Message().c_str());
+    }
+
+    bool TryConvertElementType(
+        litert::ElementType source_type,
+        NSN_TensorElementType* out_type) noexcept
+    {
+        if (out_type == nullptr)
+        {
+            return false;
+        }
+
+        switch (source_type)
+        {
+        case litert::ElementType::None:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_NONE;
+            return true;
+        case litert::ElementType::Bool:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_BOOL;
+            return true;
+        case litert::ElementType::Int2:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_INT2;
+            return true;
+        case litert::ElementType::Int4:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_INT4;
+            return true;
+        case litert::ElementType::Int8:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_INT8;
+            return true;
+        case litert::ElementType::Int16:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_INT16;
+            return true;
+        case litert::ElementType::Int32:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_INT32;
+            return true;
+        case litert::ElementType::Int64:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_INT64;
+            return true;
+        case litert::ElementType::UInt4:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_UINT4;
+            return true;
+        case litert::ElementType::UInt8:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_UINT8;
+            return true;
+        case litert::ElementType::UInt16:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_UINT16;
+            return true;
+        case litert::ElementType::UInt32:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_UINT32;
+            return true;
+        case litert::ElementType::UInt64:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_UINT64;
+            return true;
+        case litert::ElementType::Float8E4M3FN:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_FLOAT8_E4M3FN;
+            return true;
+        case litert::ElementType::Float8E5M2:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_FLOAT8_E5M2;
+            return true;
+        case litert::ElementType::Float16:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_FLOAT16;
+            return true;
+        case litert::ElementType::BFloat16:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_BFLOAT16;
+            return true;
+        case litert::ElementType::Float32:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_FLOAT32;
+            return true;
+        case litert::ElementType::Float64:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_FLOAT64;
+            return true;
+        case litert::ElementType::Complex64:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_COMPLEX64;
+            return true;
+        case litert::ElementType::Complex128:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_COMPLEX128;
+            return true;
+        case litert::ElementType::TfResource:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_TF_RESOURCE;
+            return true;
+        case litert::ElementType::TfString:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_TF_STRING;
+            return true;
+        case litert::ElementType::TfVariant:
+            *out_type = NSN_TENSOR_ELEMENT_TYPE_TF_VARIANT;
+            return true;
+        default:
+            return false;
+        }
     }
 
     NSN_Status PopulateTensorInfo(
@@ -95,8 +184,15 @@ namespace northstar_native_detail
 
             NSN_TensorInfo tensor_info = {};
 
-            tensor_info.element_type =
-                static_cast<uint32_t>(tensor_type.ElementType());
+            if (!TryConvertElementType(
+                tensor_type.ElementType(),
+                &tensor_info.element_type))
+            {
+                return SetFailure(
+                    NSN_STATUS_TENSOR_METADATA_QUERY_FAILED,
+                    operation,
+                    "LiteRT returned an element type unknown to this version of NorthStar.Native.");
+            }
 
             tensor_info.rank =
                 static_cast<uint32_t>(dimensions.size());
